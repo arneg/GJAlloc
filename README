@@ -1,0 +1,45 @@
+==== GJAlloc ====
+
+  GJAlloc is a fixed size block allocator implementation for C. It can improve performance
+  of applications that allocate many (small) blocks of equal size.
+
+  GJAlloc comes in two different internal algorithms. One uses aligned pages to minimize the
+  cost of deallocations. It can be activated by defining BA_USE_MEMALIGN. It is optimized
+  for speed and can crash when passing a bad pointer to ba_free(). It also does not make any
+  effort to detect other misuse, like double frees.
+  The second algorithm uses unaligned pages and a hash table to locate pages. It offers some
+  fault detection. Performance may vary between the two, depending on architecture and
+  application. Good luck!
+  When debugging it is advised to compile with BA_DEBUG which will detect double frees and
+  many cases of bad memory access in blocks that have been freed.
+
+==== Usage ====
+
+    #include "block_allocator.h"
+
+    block_allocator allocator = BA_INIT(block_size, blocks);
+    /* or */
+    block_allocator allocator;
+    void ba_init(block_allocator * allocator, uint32_t block_size, uint32_t blocks)
+    /*
+     *  Initializes the block allocator.
+     *
+     *	blocks: hint for number of blocks (of size block_size) in a block allocator
+     *		page (memory areas actually requested from the system).
+     *		If blocks is 0, the ba_init() tries to determine a suitable
+     *		amount of blocks per page.
+     */
+
+    void * ba_alloc(block_allocator * allocator)
+    void ba_free(block_allocator * allocator, void * ptr)
+
+    void ba_free_all(block_allocator * allocator)
+    /*
+     * Frees all blocks (and pages) allocated in allocator. allocator is ready for further use
+     * (ba_alloc(allocator) calls.)
+     */
+
+    void ba_destroy(block_allocator * allocator)
+    /*
+     * Same as ba_free_all() but also frees all internally used memory.
+     */
