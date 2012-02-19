@@ -14,6 +14,8 @@ struct foo {
     char p[SIZE];
 };
 
+static struct foo blue = { "foobarflubar" };
+
 unsigned long long int diff(struct timespec t1, struct timespec t2) {
     return (t2.tv_sec - t1.tv_sec) * 1000000000ULL + (t2.tv_nsec - t1.tv_nsec);
 }
@@ -89,6 +91,7 @@ int main(int argc, char ** argv) {
 	map[i] = i;
 #ifndef SYSTEM_ALLOC
     ba_init(&allocator, sizeof(struct foo), 8192/sizeof(struct foo));
+    allocator.blueprint = (void*)&blue;
 #endif
     for (i = 10; i < M; i *= 2) {
 	long int n;

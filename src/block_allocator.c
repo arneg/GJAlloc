@@ -132,6 +132,19 @@ static INLINE uint32_t round_up32(const uint32_t v) {
     return round_up32_(v)+1;
 }
 
+#ifndef BA_CMEMSET
+static INLINE void cmemset(char * dst, char * src, size_t s,
+			   size_t n) {
+    memcpy(dst, src, s);
+
+    for (--n,n *= s; n >= s; n -= s,s <<= 1)
+	memcpy(dst + s, dst, s);
+
+    if (n) memcpy(dst + s, dst, n);
+}
+#define BA_CMEMSET(dst, src, s, n)	cmemset(dst, src, s, n)
+#endif
+
 EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 		    uint32_t blocks) {
     uint32_t page_size;
@@ -194,21 +207,9 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 static INLINE void ba_free_page(struct block_allocator * a, ba_page p) {
     p->first = BA_BLOCKN(a, p, 0);
     p->used = 0;
-    if (a->blueprint) {
-	//xmemset(p+1, a->blueprint, a->block_size, a->blocks);
-	size_t len = (a->blocks - 1) * a->block_size, clen = a->block_size;
-	p++;
-	memcpy(p, a->blueprint, a->block_size);
 
-	while (len > clen) {
-	    memcpy(((char*)(p)) + clen, p, clen);
-	    len -= clen;
-	    clen <<= 1;
-	}
-
-	if (len) memcpy(((char*)(p)) + clen, p, len);
-	p--;
-    }
+    if (a->blueprint)
+	BA_CMEMSET((char*)(p+1), (char*)a->blueprint, a->block_size, a->blocks);
 
 #ifdef BA_CHAIN_PAGE
     do {
