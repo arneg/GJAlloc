@@ -1,0 +1,77 @@
+#ifndef BLOCK_ALLOCATOR_HH
+#include <vector>
+#include <cassert>
+#include <iostream> // DEBUG
+//#define PHONY_ALLOC_SCHEME
+#ifndef PHONY_ALLOC_SCHEME
+extern "C" {
+# include "block_allocator.h"
+}
+#endif
+#define BLOCK_ALLOCATOR_HH
+
+
+#ifdef PHONY_ALLOC_SCHEME
+template <size_t N, size_t BLOCKS> class GJAlloc_Singleton {
+    struct MV {
+	int cnt;
+
+	MV() {
+	    std::cerr << "BTW: N, BLOCKS: " << N << ", " << BLOCKS << "." << std::endl;
+	    cnt = 0;
+	}
+    };
+    static MV mv;
+public:
+
+    static void *allocate() {
+	return (void*)(++(mv.cnt) * N);
+    }
+};
+#else
+template <size_t N, size_t BLOCKS> class GJAlloc_Singleton {
+    struct MV {
+	block_allocator allocator;
+
+	MV() {
+	    ba_init(&allocator, N, BLOCKS);
+	}
+    };
+    static MV mv;
+
+public:
+    static void *allocate() {
+	return ba_alloc(&mv.allocator);
+    }
+
+    static void deallocate(void *p) {
+	ba_free(&mv.allocator, p);
+    }
+};
+#endif
+template <size_t N, size_t BLOCKS> typename GJAlloc_Singleton<N,BLOCKS>::MV GJAlloc_Singleton<N,BLOCKS>::mv;
+//template <size_t N> typename GJAlloc_Singleton<N>::MV GJAlloc_Singleton<N>::mv;
+
+template <typename T, size_t BLOCKS=0> class GJAlloc {
+    typedef T* pointer;
+    typedef const T* const_pointer;
+    typedef T value_type;
+    typedef size_t size_type;
+    typedef ptrdiff_t difference_type;
+
+
+public:
+    pointer allocate(size_type n, const void* = 0) {
+	assert(n == 1);
+	//return static_cast<pointer>(GJAlloc_Singleton<sizeof(T)>::singleton.allocate());
+	//return static_cast<pointer>(singleton.allocate());
+	return static_cast<pointer>(GJAlloc_Singleton<sizeof(T),BLOCKS>::allocate());
+    }
+
+    void deallocate(pointer p, size_type n) {
+	assert(n == 1);
+
+	GJAlloc_Singleton<sizeof(T),BLOCKS>::deallocate(static_cast<void*>(p));
+    }
+};
+#endif
