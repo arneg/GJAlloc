@@ -724,7 +724,7 @@ static INLINE void ba_htable_linear_lookup(struct block_allocator * a,
     });
 }
 
-EXPORT INLINE void ba_find_page(struct block_allocator * a,
+EXPORT void ba_find_page(struct block_allocator * a,
 				     const void * ptr) {
     a->last_free = NULL;
 #ifdef BA_DEBUG

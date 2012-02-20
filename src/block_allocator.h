@@ -105,8 +105,24 @@ extern char errbuf[];
 #define BA_ERROR(x...)	do { ba_error(x); } while(0)
 #endif
 
-typedef struct ba_block_header * ba_block_header;
+struct ba_block_header {
+    struct ba_block_header * next;
+#ifdef BA_DEBUG
+    uint32_t magic;
+#endif
+};
+
+struct ba_page {
+    struct ba_block_header * first;
+    struct ba_page *next, *prev;
+#ifndef BA_USE_MEMALIGN
+    struct ba_page *hchain;
+#endif
+    uint32_t used;
+};
+
 typedef struct ba_page * ba_page;
+typedef struct ba_block_header * ba_block_header;
 
 #ifdef BA_STATS
 struct block_alloc_stats {
@@ -205,22 +221,6 @@ typedef struct block_allocator block_allocator;
     BA_INIT_STATS(block_size, blocks, name)\
 }
 #endif
-
-struct ba_page {
-    struct ba_block_header * first;
-    ba_page next, prev;
-#ifndef BA_USE_MEMALIGN
-    ba_page hchain;
-#endif
-    uint32_t used;
-};
-
-struct ba_block_header {
-    struct ba_block_header * next;
-#ifdef BA_DEBUG
-    uint32_t magic;
-#endif
-};
 
 #define BA_ONE	((ba_block_header)1)
 
