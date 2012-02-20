@@ -272,8 +272,23 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) 
     *size = BA_BYTES(a) + a->num_pages * BA_PAGESIZE(a);
 #endif
     PAGE_LOOP(a, {
+	if (p == a->alloc) continue;
 	n += p->used;
     });
+
+    t = a->free_blk;
+    if (t) {
+	n += a->blocks;
+	while (t) {
+	    n--;
+	    if (t->next == BA_ONE) {
+		t = (ba_b)(((char*)t) + a->block_size);
+		t->next = (ba_b)(size_t)!(t == BA_LASTBLOCK(a, a->alloc));
+	    } else {
+		t = t->next;
+	    }
+	}
+    }
 
     *num = n;
 }
