@@ -4,30 +4,10 @@
 #include <cassert>
 #include <iostream> // DEBUG
 //#define PHONY_ALLOC_SCHEME
-#ifndef PHONY_ALLOC_SCHEME
 #include "block_allocator.h"
-#endif
 #define BLOCK_ALLOCATOR_HH
 
 
-#ifdef PHONY_ALLOC_SCHEME
-template <size_t N, size_t BLOCKS> class GJAlloc_Singleton {
-    struct MV {
-	int cnt;
-
-	MV() {
-	    std::cerr << "BTW: N, BLOCKS: " << N << ", " << BLOCKS << "." << std::endl;
-	    cnt = 0;
-	}
-    };
-    static MV mv;
-public:
-
-    static void *allocate() {
-	return (void*)(++(mv.cnt) * N);
-    }
-};
-#else
 template <size_t N, size_t BLOCKS> class GJAlloc_Singleton {
     struct MV {
 	block_allocator allocator;
