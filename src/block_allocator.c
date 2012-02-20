@@ -19,7 +19,7 @@ EXPORT char errbuf[128];
 
 #ifndef BA_USE_MEMALIGN
 static INLINE void ba_htable_insert(const struct block_allocator * a,
-				    ba_page ptr);
+				    ba_p ptr);
 static INLINE void ba_htable_grow(struct block_allocator * a);
 #endif
 
@@ -29,7 +29,7 @@ static INLINE void ba_htable_grow(struct block_allocator * a);
 #define BA_PAGESIZE(a)	    (sizeof(struct ba_page) + (a)->blocks * (a)->block_size) 
 #define BA_HASH_MASK(a)  (((a->allocated)) - 1)
 
-#define BA_BYTES(a)	( (sizeof(ba_page) * ((a)->allocated) ) )
+#define BA_BYTES(a)	( (sizeof(ba_p) * ((a)->allocated) ) )
 
 #define PRINT_NODE(a, name) do {\
     fprintf(stderr, #name": %p\n", a->name);\
@@ -201,13 +201,13 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
     // we start with management structures for 16 pages
 #ifndef BA_USE_MEMALIGN
     a->allocated = BA_ALLOC_INITIAL;
-    a->pages = (ba_page*)malloc(BA_ALLOC_INITIAL * sizeof(ba_page));
+    a->pages = (ba_p*)malloc(BA_ALLOC_INITIAL * sizeof(ba_p));
     if (!a->pages) ba_error("nomem");
-    memset(a->pages, 0, BA_ALLOC_INITIAL * sizeof(ba_page));
+    memset(a->pages, 0, BA_ALLOC_INITIAL * sizeof(ba_p));
 #endif
 }
 
-static INLINE void ba_free_page(struct block_allocator * a, ba_page p) {
+static INLINE void ba_free_page(struct block_allocator * a, ba_p p) {
     p->first = BA_BLOCKN(a, p, 0);
     p->used = 0;
 
@@ -220,10 +220,10 @@ static INLINE void ba_free_page(struct block_allocator * a, ba_page p) {
 	
 	while (ptr < BA_LASTBLOCK(a, p)) {
 #ifdef BA_DEBUG
-	    MEM_RW(((ba_block_header)ptr)->magic);
-	    ((ba_block_header)ptr)->magic = BA_MARK_FREE;
+	    MEM_RW(((ba_b)ptr)->magic);
+	    ((ba_b)ptr)->magic = BA_MARK_FREE;
 #endif
-	    ((ba_block_header)ptr)->next = (ba_block_header)(ptr+a->block_size);
+	    ((ba_b)ptr)->next = (ba_b)(ptr+a->block_size);
 	    ptr+=a->block_size;
 	}
 	BA_LASTBLOCK(a, p)->next = NULL;
@@ -257,7 +257,7 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
 #else
     a->last_free = NULL;
     a->allocated = BA_ALLOC_INITIAL;
-    memset(a->pages, 0, a->allocated * sizeof(ba_page));
+    memset(a->pages, 0, a->allocated * sizeof(ba_p));
 #endif
 }
 
@@ -278,7 +278,7 @@ EXPORT INLINE void ba_count_all(struct block_allocator * a, size_t *num, size_t 
     *num = n;
 }
 
-EXPORT INLINE void ba_destroy(struct block_allocator * a) {
+EXPORT void ba_destroy(struct block_allocator * a) {
     unsigned int i;
 
     PAGE_LOOP(a, {
@@ -349,16 +349,16 @@ static INLINE void ba_htable_grow(struct block_allocator * a) {
     uint32_t n, old;
     old = a->allocated;
     a->allocated *= 2;
-    a->pages = (ba_page*)realloc(a->pages, a->allocated * sizeof(ba_page));
+    a->pages = (ba_p*)realloc(a->pages, a->allocated * sizeof(ba_p));
     if (!a->pages) ba_error("nomem");
-    memset(a->pages+old, 0, old * sizeof(ba_page));
+    memset(a->pages+old, 0, old * sizeof(ba_p));
     for (n = 0; n < old; n++) {
-	ba_page * b = a->pages + n;
+	ba_p * b = a->pages + n;
 
 	while (*b) {
 	    uint32_t h = hash1(a, BA_LASTBLOCK(a, *b)) & BA_HASH_MASK(a);
 	    if (h != n) {
-		ba_page p = *b;
+		ba_p p = *b;
 		*b = p->hchain;
 		p->hchain = a->pages[h];
 		a->pages[h] = p;
@@ -375,10 +375,10 @@ static INLINE void ba_htable_shrink(struct block_allocator * a) {
     a->allocated /= 2;
 
     for (n = 0; n < a->allocated; n++) {
-	ba_page p = a->pages[a->allocated + n];
+	ba_p p = a->pages[a->allocated + n];
 
 	if (p) {
-	    ba_page t = p;
+	    ba_p t = p;
 	    if (a->pages[n]) {
 		while (t->hchain) t = t->hchain;
 		t->hchain = a->pages[n];
@@ -387,7 +387,7 @@ static INLINE void ba_htable_shrink(struct block_allocator * a) {
 	}
     }
 
-    a->pages = (ba_page*)realloc(a->pages, a->allocated * sizeof(ba_page));
+    a->pages = (ba_p*)realloc(a->pages, a->allocated * sizeof(ba_p));
     if (!a->pages) ba_error("nomem");
 }
 
@@ -396,7 +396,7 @@ EXPORT void ba_print_htable(const struct block_allocator * a) {
     unsigned int i;
 
     for (i = 0; i < a->allocated; i++) {
-	ba_page p = a->pages[i];
+	ba_p p = a->pages[i];
 	uint32_t hval;
 	if (!p) {
 	    fprintf(stderr, "empty %u\n", i);
@@ -416,9 +416,9 @@ EXPORT void ba_print_htable(const struct block_allocator * a) {
  * hashtable. uses linear probing and open allocation.
  */
 static INLINE void ba_htable_insert(const struct block_allocator * a,
-				    ba_page p) {
+				    ba_p p) {
     uint32_t hval = hash1(a, BA_LASTBLOCK(a, p));
-    ba_page * b = a->pages + (hval & BA_HASH_MASK(a));
+    ba_p * b = a->pages + (hval & BA_HASH_MASK(a));
 
 
 #ifdef BA_DEBUG
@@ -471,9 +471,9 @@ static INLINE void ba_htable_replace(const struct block_allocator * a,
 #endif
 
 static INLINE void ba_htable_delete(const struct block_allocator * a,
-				    ba_page p) {
+				    ba_p p) {
     uint32_t hval = hash1(a, BA_LASTBLOCK(a, p));
-    ba_page * b = a->pages + (hval & BA_HASH_MASK(a));
+    ba_p * b = a->pages + (hval & BA_HASH_MASK(a));
 
     while (*b) {
 	if (*b == p) {
@@ -492,7 +492,7 @@ static INLINE void ba_htable_delete(const struct block_allocator * a,
 
 static INLINE void ba_htable_lookup(struct block_allocator * a,
 				    const void * ptr) {
-    ba_page p;
+    ba_p p;
     uint32_t h[2];
     unsigned char c, b = 0;
     h[0] = hash1(a, ptr);
@@ -519,7 +519,7 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 				    char *fun, char *file, int line) {
     uint32_t n;
     int bad = 0;
-    ba_page p;
+    ba_p p;
 
     if (a->empty_pages > a->num_pages) {
 	fprintf(stderr, "too many empty pages.\n");
@@ -620,7 +620,7 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 #endif
 
 static INLINE void ba_alloc_page(struct block_allocator * a) {
-    ba_page p;
+    ba_p p;
     unsigned int i;
 
 #ifdef BA_USE_MEMALIGN
@@ -633,9 +633,9 @@ static INLINE void ba_alloc_page(struct block_allocator * a) {
 
     a->num_pages++;
 #ifndef BA_USE_MEMALIGN
-    p = (ba_page)malloc(BA_PAGESIZE(a));
+    p = (ba_p)malloc(BA_PAGESIZE(a));
 #else
-    p = (ba_page)memalign((size_t)(1 << a->magnitude), BA_PAGESIZE(a));
+    p = (ba_p)memalign((size_t)(1 << a->magnitude), BA_PAGESIZE(a));
 #endif
     if (!p) BA_ERROR("no mem. alloc returned zero.");
     ba_free_page(a, p);
@@ -696,8 +696,7 @@ EXPORT void ba_low_alloc(struct block_allocator * a) {
 #endif
 }
 
-EXPORT void ba_low_free(struct block_allocator * a, ba_page p,
-			     ba_block_header ptr) {
+EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
     if (!p->used) {
 	INC(free_empty);
 	if (a->empty_pages == a->max_empty_pages) {
@@ -759,8 +758,7 @@ EXPORT void ba_find_page(struct block_allocator * a,
 }
 #endif
 
-EXPORT void ba_remove_page(struct block_allocator * a,
-				       ba_page p) {
+EXPORT void ba_remove_page(struct block_allocator * a, ba_p p) {
 #ifdef BA_DEBUG
     ba_check_allocator(a, "ba_remove_page", __FILE__, __LINE__);
     if (a->empty_pages < a->max_empty_pages) {

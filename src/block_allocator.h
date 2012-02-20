@@ -128,13 +128,8 @@ struct ba_page {
     uint32_t used;
 };
 
-#ifdef __cplusplus
-#define ba_page ba_page *
-#define ba_block_header ba_block_header *
-#else
-typedef struct ba_page * ba_page;
-typedef struct ba_block_header * ba_block_header;
-#endif
+typedef struct ba_page * ba_p;
+typedef struct ba_block_header * ba_b;
 
 #ifdef BA_STATS
 struct block_alloc_stats {
@@ -166,10 +161,10 @@ struct block_allocator {
 #else
     size_t offset;
 #endif
-    ba_block_header free_blk; /* next free blk in alloc */
-    ba_page alloc; /* current page used for allocating */
+    ba_b free_blk; /* next free blk in alloc */
+    ba_p alloc; /* current page used for allocating */
 #ifndef BA_USE_MEMALIGN
-    ba_page last_free;
+    ba_p last_free;
 #endif
 #ifdef BA_USE_MEMALIGN
     size_t offset;
@@ -177,13 +172,13 @@ struct block_allocator {
     uint32_t block_size;
     uint32_t magnitude;
 #endif
-    ba_page first; /* doube linked list of other pages (!free,!full,!alloc) */
+    ba_p first; /* doube linked list of other pages (!free,!full,!alloc) */
 #ifndef BA_USE_MEMALIGN
-    ba_page * pages;
+    ba_p * pages;
 #else
-    ba_page full; /* doube linked list of full pages */
+    ba_p full; /* doube linked list of full pages */
 #endif
-    ba_page empty; /* single linked list of empty pages */
+    ba_p empty; /* single linked list of empty pages */
     uint32_t empty_pages, max_empty_pages;
     uint32_t blocks;
 #ifndef BA_USE_MEMALIGN
@@ -234,10 +229,10 @@ typedef struct block_allocator block_allocator;
 }
 #endif
 
-#define BA_ONE	((ba_block_header)1)
+#define BA_ONE	((ba_b)1)
 
 EXPORT void ba_low_free(struct block_allocator * a,
-				    ba_page p, ba_block_header ptr);
+				    ba_p p, ba_b ptr);
 EXPORT void ba_show_pages(const struct block_allocator * a);
 EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 			 uint32_t blocks);
@@ -246,7 +241,7 @@ EXPORT void ba_low_alloc(struct block_allocator * a);
 EXPORT void ba_find_page(struct block_allocator * a,
 			      const void * ptr);
 #endif
-EXPORT void ba_remove_page(struct block_allocator * a, ba_page p);
+EXPORT void ba_remove_page(struct block_allocator * a, ba_p p);
 #ifdef BA_DEBUG
 EXPORT void ba_print_htable(const struct block_allocator * a);
 EXPORT void ba_check_allocator(struct block_allocator * a, char*, char*, int);
@@ -259,9 +254,9 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size);
 EXPORT void ba_destroy(struct block_allocator * a);
 
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
-#define BA_BLOCKN(a, p, n) ((ba_block_header)(((char*)(p+1)) + (n)*((a)->block_size)))
+#define BA_BLOCKN(a, p, n) ((ba_b)(((char*)(p+1)) + (n)*((a)->block_size)))
 #define BA_CHECK_PTR(a, p, ptr)	((size_t)((char*)ptr - (char*)(p)) <= (a)->offset)
-#define BA_LASTBLOCK(a, p) ((ba_block_header)((char*)p + (a)->offset))
+#define BA_LASTBLOCK(a, p) ((ba_b)((char*)p + (a)->offset))
 
 #ifdef BA_STATS
 # define INC(X) do { (a->stats.X++); } while (0)
@@ -290,7 +285,7 @@ static ATTRIBUTE((constructor)) void _________() {
 
 ATTRIBUTE((always_inline,malloc))
 static INLINE void * ba_alloc(struct block_allocator * a) {
-    ba_block_header ptr;
+    ba_b ptr;
 #ifdef BA_STATS
     struct block_alloc_stats *s = &a->stats;
 #endif
@@ -304,13 +299,13 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
     ptr = a->free_blk;
 #ifndef BA_CHAIN_PAGE
     if (ptr->next == BA_ONE) {
-	a->free_blk = (ba_block_header)(((char*)ptr) + a->block_size);
-	a->free_blk->next = (ba_block_header)(size_t)!(a->free_blk == BA_LASTBLOCK(a, a->alloc));
+	a->free_blk = (ba_b)(((char*)ptr) + a->block_size);
+	a->free_blk->next = (ba_b)(size_t)!(a->free_blk == BA_LASTBLOCK(a, a->alloc));
     } else
 #endif
 	a->free_blk = ptr->next;
 #ifdef BA_DEBUG
-    ((ba_block_header)ptr)->magic = BA_MARK_ALLOC;
+    ((ba_b)ptr)->magic = BA_MARK_ALLOC;
 #endif
 #ifdef BA_MEMTRACE
     PRINT("%% %p 0x%x\n", ptr, a->block_size);
@@ -335,7 +330,7 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 
 ATTRIBUTE((always_inline))
 static INLINE void ba_free(struct block_allocator * a, void * ptr) {
-    ba_page p;
+    ba_p p;
 
 #ifdef BA_MEMTRACE
     PRINT("%% %p\n", ptr);
@@ -345,26 +340,26 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     if (a->empty_pages == a->num_pages) {
 	BA_ERROR("we did it!\n");
     }
-    if (((ba_block_header)ptr)->magic == BA_MARK_FREE) {
+    if (((ba_b)ptr)->magic == BA_MARK_FREE) {
 	BA_ERROR("double freed somethign\n");
     }
     //memset(ptr, 0x75, a->block_size);
-    ((ba_block_header)ptr)->magic = BA_MARK_FREE;
+    ((ba_b)ptr)->magic = BA_MARK_FREE;
 #endif
 
 #ifdef BA_STATS
     a->stats.st_used--;
 #endif
 #ifdef BA_USE_MEMALIGN
-    p = (ba_page)((uintptr_t)ptr &
+    p = (ba_p)((uintptr_t)ptr &
 			  ((~(uintptr_t)0) << (a->magnitude)));
     if (likely(p == a->alloc)) {
 #else
     if (likely(a->alloc && BA_CHECK_PTR(a, a->alloc, ptr))) {
 #endif
 	INC(free_fast1);
-	((ba_block_header)ptr)->next = a->free_blk;
-	a->free_blk = (ba_block_header)ptr;
+	((ba_b)ptr)->next = a->free_blk;
+	a->free_blk = (ba_b)ptr;
 	return;
     }
 
@@ -380,14 +375,14 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	p = a->last_free;
     }
 #endif
-    ((ba_block_header)ptr)->next = p->first;
-    p->first = (ba_block_header)ptr;
-    if ((--p->used) && (((ba_block_header)ptr)->next)) {
+    ((ba_b)ptr)->next = p->first;
+    p->first = (ba_b)ptr;
+    if ((--p->used) && (((ba_b)ptr)->next)) {
 	INC(free_fast2);
 	return;
     }
 
-    ba_low_free(a, p, (ba_block_header)ptr);
+    ba_low_free(a, p, (ba_b)ptr);
 }
 
 /* we assume here that malloc has sizeof(void*) bytes of overhead */
@@ -398,12 +393,12 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 #ifdef BA_USE_MEMALIGN
 #define LOW_PAGE_LOOP2(a, label, C...)	do {			\
     char __c = 4;						\
-    const ba_page T[4] = { a->full, a->first, a->alloc, a->empty };	\
-    ba_page p;							\
+    const ba_p T[4] = { a->full, a->first, a->alloc, a->empty };	\
+    ba_p p;							\
     retry ## label:						\
     p = T[__c-1];						\
     while (p) {							\
-	ba_page t = p->next;					\
+	ba_p t = p->next;					\
 	do { C; goto SURVIVE ## label; } while(0);		\
 	goto label; SURVIVE ## label: p = t;			\
     }								\
@@ -416,9 +411,9 @@ label:								\
 #define LOW_PAGE_LOOP2(a, label, C...)	do {			\
     uint32_t __n;						\
     for (__n = 0; __n < a->allocated; __n++) {			\
-	ba_page p = a->pages[__n];				\
+	ba_p p = a->pages[__n];				\
 	while (p) {						\
-	    ba_page t = p->hchain;				\
+	    ba_p t = p->hchain;				\
 	    do { C; goto SURVIVE ## label; } while(0);		\
 	    goto label; SURVIVE ## label: p = t;		\
 	}							\
