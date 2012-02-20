@@ -37,8 +37,6 @@ static INLINE void ba_htable_grow(struct block_allocator * a);
 
 
 EXPORT void ba_show_pages(const struct block_allocator * a) {
-    unsigned int i = 0;
-
 #ifndef BA_USE_MEMALIGN
     fprintf(stderr, "allocated: %u\n", a->allocated);
 #endif
@@ -234,8 +232,6 @@ static INLINE void ba_free_page(struct block_allocator * a, ba_p p) {
 }
 
 EXPORT INLINE void ba_free_all(struct block_allocator * a) {
-    unsigned int i;
-
 #ifdef BA_USE_MEMALIGN
     if (!a->num_pages) return;
 #else
@@ -262,7 +258,6 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
 }
 
 EXPORT INLINE void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) {
-    unsigned int i;
     size_t n = 0;
 
     //fprintf(stderr, "page_size: %u, pages: %u\n", BA_PAGESIZE(a), a->num_pages);
@@ -279,8 +274,6 @@ EXPORT INLINE void ba_count_all(struct block_allocator * a, size_t *num, size_t 
 }
 
 EXPORT void ba_destroy(struct block_allocator * a) {
-    unsigned int i;
-
     PAGE_LOOP(a, {
 	MEM_RW_RANGE(p, BA_PAGESIZE(a));
 	free(p);
@@ -621,7 +614,6 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 
 static INLINE void ba_alloc_page(struct block_allocator * a) {
     ba_p p;
-    unsigned int i;
 
 #ifdef BA_USE_MEMALIGN
     if (a->num_pages == 0) ba_init(a, a->block_size, a->blocks);
