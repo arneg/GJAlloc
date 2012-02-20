@@ -27,12 +27,27 @@ public:
     static void deallocate(void *p) {
 	ba_free(&mv.allocator, p);
     }
+
+    static uint32_t num_pages() {
+	return mv.allocator.num_pages;
+    }
+
+    static size_t count_blocks() {
+	size_t num, size;
+	ba_count_all(&(mv.allocator), &num, &size);
+	return num;
+    }
+
+    static size_t count_bytes() {
+	size_t num, size;
+	ba_count_all(&(mv.allocator), &num, &size);
+	return size;
+    }
 };
 
 template <size_t BA_N, size_t BLOCKS> typename GJAlloc_Singleton<BA_N,BLOCKS>::MV GJAlloc_Singleton<BA_N,BLOCKS>::mv;
 
-template <typename T, size_t BLOCKS=0> class GJAlloc
-{
+template <typename T, size_t BLOCKS=0> class GJAlloc {
     typedef T* pointer;
     typedef const T* const_pointer;
     typedef T value_type;
@@ -67,21 +82,29 @@ public:
 	typedef GJAlloc<U> other;
     };
 
-    GJAlloc() throw() {
-	std::cerr << "GJAlloc()" << std::endl;
-    }
+    GJAlloc() throw() { }
     GJAlloc(const GJAlloc &a) throw() {
 	std::cerr << "GJAlloc(const GJAlloc&)" << std::endl;
     }
     template <typename U> GJAlloc(const GJAlloc<U> &a) throw() {
 	std::cerr << "GJAlloc(T -> U)" << std::endl;
     }
-    ~GJAlloc() throw() {
-	std::cerr << "~GJAlloc()" << std::endl;
-    }
+    ~GJAlloc() throw() { }
 
     size_type max_size() {
 	return 1;
+    }
+
+    uint32_t num_pages() {
+	return GJAlloc_Singleton<sizeof(T),BLOCKS>::num_pages();
+    }
+
+    size_t count_blocks() {
+	return GJAlloc_Singleton<sizeof(T),BLOCKS>::count_blocks();
+    }
+
+    size_t count_bytes() {
+	return GJAlloc_Singleton<sizeof(T),BLOCKS>::count_bytes();
     }
 };
 
@@ -94,6 +117,4 @@ template <class T1, class T2>
 bool operator!=(const GJAlloc<T1>&, const GJAlloc<T2>&) throw() {
     return sizeof(T1)!=sizeof(T2);
 }
-
-
 #endif
