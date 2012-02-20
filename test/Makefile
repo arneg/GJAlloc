@@ -48,6 +48,12 @@ cpp/test_%:	 test_%.hh test.cpp
 	cat test.cpp >> a.in.c
 	g++ $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
 	rm a.in.c
+cpp/list_%:	 test_%.hh test.cpp
+	cat $< > a.in.c
+	echo "#line 1 \"test.cpp\"" >> a.in.c
+	cat list.cpp >> a.in.c
+	g++ $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
+	rm a.in.c
 c/test_%:	test_%.h test.c 
 	cat $< > a.in.c
 	echo "#line 1 \"test.c\"" >> a.in.c
