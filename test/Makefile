@@ -41,3 +41,16 @@ ba_dsegregate: files
 
 ba_system: files
 	${CC} $(LD_FLAGS) -DSYSTEM_ALLOC -o $@ test.c
+
+cpp/test_%:	 test_%.hh test.cpp
+	cat $< > a.in.c
+	echo "#line 1 \"test.cpp\"" >> a.in.c
+	cat test.cpp >> a.in.c
+	g++ $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
+	rm a.in.c
+c/test_%:	test_%.h test.c 
+	cat $< > a.in.c
+	echo "#line 1 \"test.c\"" >> a.in.c
+	cat test.c >> a.in.c
+	gcc $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
+	rm a.in.c

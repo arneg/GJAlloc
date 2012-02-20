@@ -8,8 +8,6 @@
 #define N 14000000
 #define SIZE	32
 
-#include "../src/block_allocator.h"
-
 struct foo {
     char p[SIZE];
 };
@@ -36,9 +34,7 @@ void shuffle(uint32_t * array, size_t n)
 void **p;
 size_t mdiff = 0, fdiff = 0;
 uint32_t num_pages = 0;
-#ifndef SYSTEM_MALLOC
-block_allocator allocator;
-#endif
+TEST_INIT(foo);
 
 long int run2(long int n, uint32_t * shuffler) {
     long int i, j;
@@ -48,22 +44,12 @@ long int run2(long int n, uint32_t * shuffler) {
     clock_gettime(CLOCK_MONOTONIC, &t1);
     for (i = 0; i < runs; i++) {
 	for (j = 0; j < n; j++) {
-#ifdef SYSTEM_ALLOC
-	    p[j] = malloc(SIZE);
-#else
-	    p[j] = ba_alloc(&allocator);
-#endif
+	    p[j] = TEST_ALLOC(foo);
 	}
-#if !defined(SYSTEM_ALLOC)
-	num_pages = allocator.num_pages;
-#endif
+	TEST_NUM_PAGES(foo, num_pages);
 	for (j = 0; j < n; j++) {
 	    long int k = shuffler[j];
-#ifdef SYSTEM_ALLOC
-	    free(p[k]);
-#else
-	    ba_free(&allocator, p[k]);
-#endif
+	    TEST_FREE(foo, p[k]);
 	}
     }
     clock_gettime(CLOCK_MONOTONIC, &t2);
@@ -89,10 +75,6 @@ int main(int argc, char ** argv) {
 
     for (i = 0; i < N; i++)
 	map[i] = i;
-#ifndef SYSTEM_ALLOC
-    ba_init(&allocator, sizeof(struct foo), 8192/sizeof(struct foo));
-    allocator.blueprint = (void*)&blue;
-#endif
     for (i = 10; i < M; i *= 2) {
 	long int n;
 	mdiff = fdiff = 0;
@@ -103,9 +85,7 @@ int main(int argc, char ** argv) {
 	fprintf(stderr, "% 10d\t%.1f\t%u\n", i, (double)mdiff/(n), num_pages);
     }
 
-#if !defined(SYSTEM_ALLOC)
-    ba_destroy(&allocator);
-#endif
+    TEST_DEINIT(foo);
 
     return 0;
 }
