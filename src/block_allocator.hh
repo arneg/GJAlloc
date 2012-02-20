@@ -8,12 +8,13 @@
 #define BLOCK_ALLOCATOR_HH
 
 
-template <size_t N, size_t BLOCKS> class GJAlloc_Singleton {
+template <size_t BA_N, size_t BLOCKS> class GJAlloc_Singleton
+{
     struct MV {
 	block_allocator allocator;
 
 	MV() {
-	    ba_init(&allocator, N, BLOCKS);
+	    ba_init(&allocator, BA_N, BLOCKS);
 	}
     };
     static MV mv;
@@ -27,11 +28,11 @@ public:
 	ba_free(&mv.allocator, p);
     }
 };
-#endif
-template <size_t N, size_t BLOCKS> typename GJAlloc_Singleton<N,BLOCKS>::MV GJAlloc_Singleton<N,BLOCKS>::mv;
-//template <size_t N> typename GJAlloc_Singleton<N>::MV GJAlloc_Singleton<N>::mv;
 
-template <typename T, size_t BLOCKS=0> class GJAlloc {
+template <size_t BA_N, size_t BLOCKS> typename GJAlloc_Singleton<BA_N,BLOCKS>::MV GJAlloc_Singleton<BA_N,BLOCKS>::mv;
+
+template <typename T, size_t BLOCKS=0> class GJAlloc
+{
     typedef T* pointer;
     typedef const T* const_pointer;
     typedef T value_type;
