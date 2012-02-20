@@ -38,6 +38,16 @@ public:
 	ba_free(&mv.allocator, p);
     }
 
+    template <typename T> static void construct(void *p, const T &val) {
+	std::cerr << "WARNING: static construct has been called." << std::endl;
+	new ((void*)p) T(val);
+    }
+
+    template <typename T> static void destroy(void *p) {
+	((T*)p)->~T();
+    }
+
+
     static uint32_t num_pages() {
 	return mv.allocator.num_pages;
     }
@@ -57,9 +67,9 @@ public:
 
 template <size_t BA_N, size_t BLOCKS> typename GJAlloc_Singleton<BA_N,BLOCKS>::MV GJAlloc_Singleton<BA_N,BLOCKS>::mv;
 
-template <typename T, size_t BLOCKS=0> class GJAlloc {
-    typedef T* pointer;
-    typedef const T* const_pointer;
+template <typename T, size_t BLOCKS=0, typename ptr_type=T*> class GJAlloc {
+    typedef ptr_type pointer;
+    typedef const ptr_type const_pointer;
     typedef T value_type;
     typedef size_t size_type;
     typedef ptrdiff_t difference_type;
@@ -70,7 +80,8 @@ public:
 	assert(n == 1);
 	//return static_cast<pointer>(GJAlloc_Singleton<sizeof(T)>::singleton.allocate());
 	//return static_cast<pointer>(singleton.allocate());
-	return static_cast<pointer>(GJAlloc_Singleton<sizeof(T),BLOCKS>::allocate());
+	pointer ptr(static_cast<value_type*>(GJAlloc_Singleton<sizeof(T),BLOCKS>::allocate()));
+	return ptr;
     }
 
     void deallocate(pointer p, size_type n) {
@@ -133,4 +144,5 @@ template <class T1, class T2>
 bool operator!=(const GJAlloc<T1>&, const GJAlloc<T2>&) throw() {
     return sizeof(T1)!=sizeof(T2);
 }
+
 #endif
