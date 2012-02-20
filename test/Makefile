@@ -6,11 +6,8 @@ GCC=gcc -O3 -msse -msse2 -mssse3 -msse4.1 -msse4.2 -I../src
 GCC=gcc -O3 -I../src
 CC=$(GCC)
 
-all: ba_segregate ba_system alloc.o alloc2.o ba_dsegregate
+all: c/test_gj c/test_gj_memalign c/test_system cpp/test_gj cpp/test_fsb cpp/test_boost cpp/test_std cpp/list_gj cpp/list_boost cpp/list_std cpp/list_fsb
 	@echo ""
-	@echo ./ba_system to benchmark system malloc
-	@echo ./ba_segregate to benchmark block allocator with hash
-	@echo ./ba_dsegregate to benchmark block allocator with aligned pages
 ifndef X
 	@echo ""
 	@echo Run as
@@ -56,7 +53,7 @@ cpp/test_%:	 test_%.hh test.cpp cpp
 	rm a.in.c
 cpp/list_%:	 test_%.hh test.cpp cpp
 	cat $< > a.in.c
-	echo "#line 1 \"test.cpp\"" >> a.in.c
+	echo "#line 1 \"list.cpp\"" >> a.in.c
 	cat list.cpp >> a.in.c
 	g++ $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
 	rm a.in.c
