@@ -147,7 +147,7 @@ struct block_alloc_stats {
     0/*st_used*/,\
     0/*st_max_pages*/,\
     0/*st_max_allocated*/,\
-    name/*st_name*/,\
+    "" name/*st_name*/,\
     0,0,0,0,0,0,0,\
     0,0}
 #else
@@ -192,7 +192,7 @@ struct block_allocator {
 };
 typedef struct block_allocator block_allocator;
 #ifdef BA_USE_MEMALIGN
-#define BA_INIT(block_size, blocks, name) {\
+#define BA_INIT(block_size, blocks, name...) {\
     block_size/*block_size*/,\
     0/*magnitude*/,\
     NULL/*free_blk*/,\
@@ -209,7 +209,7 @@ typedef struct block_allocator block_allocator;
     BA_INIT_STATS(block_size, blocks, name)\
 }
 #else
-#define BA_INIT(block_size, blocks, name) {\
+#define BA_INIT(block_size, blocks, name...) {\
     0/*offset*/,\
     NULL/*free_blk*/,\
     NULL/*alloc*/,\
