@@ -2,7 +2,9 @@
 
   GJAlloc is a fixed size block allocator implementation for C. It can
   improve performance of applications that allocate many (small) blocks of
-  equal size.
+  equal size. The allocator has no overhead per individual block. The minimum
+  block size is sizeof(void*) and allocators initialized with a block size
+  smaller than that will use blocks of size sizeof(void*) implicitly.
 
   GJAlloc comes in two different internal algorithms. One uses aligned pages
   to minimize the cost of deallocations. It can be activated by defining
@@ -17,7 +19,7 @@
   double frees and many cases of bad memory access in blocks that have been
   freed.
 
-==== Usage ====
+==== Usage in C ====
 
     #include "block_allocator.h"
 
@@ -49,3 +51,41 @@
     /*
      * Same as ba_free_all() but also frees all internally used memory.
      */
+
+==== Usage in C++ ====
+
+  GJAlloc comes with std:allocator compatible template definitions. It can
+  allocate one chunk at a time only (for use in std::list, std::set
+  and std::map).
+
+    #include "block_allocator.hh"
+
+  Then you are doomed. So many options.
+  The simple usage:
+
+    std::list<foo, GJAlloc<foo> > l; // you're good, have fun
+    std::list<foo, GJAlloc<foo, 1024> > l; // 1024 blocks per allocator page now
+
+  More fun can be had by using the GJAlloc directly.
+  Note: In this cases, make sure you keep the GJAlloc object around until you
+        have no further use for any of the allocated blocks, they will be
+	freed when the last GJAlloc for matching type size (and blocks per
+	page setting) goes out of scope.
+
+    GJAlloc<double> double_alloc;
+    double *d(double_alloc.allocate(1));
+    double_alloc.deallocate(d);
+
+    GJAlloc<double, 2048> double_alloc; // 2048 blocks per allocator page
+    double *d(double_alloc.allocate(1));
+    double_alloc.deallocate(d);
+
+  Ultimate pleasures:
+
+    #include "smartpointer.hh"
+
+    GJAlloc<double, 0, SmartPointer<double> > double_alloc;
+    SmartPointer<double> d(double_alloc.allocate(1));
+
+  Notice: no deallocate here. Each block will be automatically freed when
+  the last SmartPointer pointing to it goes out of scope.
