@@ -41,7 +41,7 @@ int main() {
 
     clock_gettime(CLOCK_MONOTONIC, &t2);
 
-    printf("%lf s\t%lu bytes\n", diff(t1, t2)*1E-9, m.uordblks);
+    printf("%lf s\t%d bytes\n", diff(t1, t2)*1E-9, m.uordblks);
 
     return 0;
 }
