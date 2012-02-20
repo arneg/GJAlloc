@@ -1,3 +1,4 @@
+#include <bits/allocator.h>
 #define TEST_CLASS(t)	std::allocator<t>
 #define TEST_INIT(t)	TEST_CLASS(t) a
 #define TEST_ALLOC(t)	a.allocate(1)
