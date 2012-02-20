@@ -45,6 +45,9 @@ cpp:
 c:
 	mkdir c
 
+perf:
+	mkdir perf
+
 cpp/test_%:	 test_%.hh test.cpp cpp
 	cat $< > a.in.c
 	echo "#line 1 \"test.cpp\"" >> a.in.c
@@ -63,3 +66,8 @@ c/test_%:	test_%.h test.c  c
 	cat test.c >> a.in.c
 	gcc $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
 	rm a.in.c
+perf/test_%.dat: cpp/test_%
+	./$< > $@
+
+perf/test.png: perf/test_gj.dat perf/test_std.dat perf/test_boost.dat perf/test_fsb.dat
+	gnuplot test.plot
