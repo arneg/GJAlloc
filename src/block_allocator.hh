@@ -68,14 +68,15 @@ public:
 template <size_t BA_N, size_t BLOCKS> typename GJAlloc_Singleton<BA_N,BLOCKS>::MV GJAlloc_Singleton<BA_N,BLOCKS>::mv;
 
 template <typename T, size_t BLOCKS=0, typename ptr_type=T*> class GJAlloc {
+public:
     typedef ptr_type pointer;
     typedef const ptr_type const_pointer;
     typedef T value_type;
+    typedef T& reference;
+    typedef const T& const_reference;
     typedef size_t size_type;
     typedef ptrdiff_t difference_type;
 
-
-public:
     pointer allocate(size_type n, const void* = 0) {
 	assert(n == 1);
 	//return static_cast<pointer>(GJAlloc_Singleton<sizeof(T)>::singleton.allocate());
@@ -91,7 +92,6 @@ public:
     }
 
     void construct(pointer p, const T &val) {
-	std::cerr << "WARNING: construct has been called." << std::endl;
 	new ((void*)p) T(val);
     }
 
@@ -108,11 +108,9 @@ public:
     }
     GJAlloc(const GJAlloc &a) throw() {
 	GJAlloc_Singleton<sizeof(T),BLOCKS>::register_alloc();
-	std::cerr << "GJAlloc(const GJAlloc&)" << std::endl;
     }
     template <typename U> GJAlloc(const GJAlloc<U> &a) throw() {
 	GJAlloc_Singleton<sizeof(T),BLOCKS>::register_alloc();
-	std::cerr << "GJAlloc(T -> U)" << std::endl;
     }
     ~GJAlloc() throw() {
 	GJAlloc_Singleton<sizeof(T),BLOCKS>::unregister_alloc();
