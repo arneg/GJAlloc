@@ -82,7 +82,7 @@ int main(int argc, char ** argv) {
 	shuffle(map, i);
 #endif
 	n = run2(i, map);
-	fprintf(stderr, "% 10d\t%.1f\t%u\n", i, (double)mdiff/(n), num_pages);
+	printf("% 10d\t%.1f\t%u\n", i, (double)mdiff/(n), num_pages);
     }
 
     TEST_DEINIT(foo);

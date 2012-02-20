@@ -69,7 +69,6 @@ int main(int argc, char ** argv) {
     srand ( time(NULL) );
     long int loops;
 
-    printf("BTW: %lu.\n", sizeof(foo));
 
 #ifndef REAL_RANDOM
 # ifdef SEED
@@ -89,7 +88,7 @@ int main(int argc, char ** argv) {
 	shuffle(map, i);
 #endif
 	n = run2(i, map);
-	fprintf(stderr, "% 10ld\t%.1f\t%u\n", i, (double)mdiff/(n), num_pages);
+	printf("%ld\t%.1f\t%u\n", i, (double)mdiff/(n), num_pages);
     }
 
     TEST_DEINIT(foo);
