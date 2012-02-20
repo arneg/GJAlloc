@@ -4,6 +4,12 @@
 
 template <class T, size_t BLOCKS=0> class SmartPointer {
     static GJAlloc<T, BLOCKS> allocator;
+
+    template <size_t N_ONE, size_t N_TWO> struct cmp_size { };
+    template <size_t N_TWO> struct cmp_size<N_TWO, N_TWO> {
+	typedef void same;
+    };
+
 public:
     SmartPointer() {
 	refs = NULL;
@@ -30,6 +36,7 @@ public:
     }
     
     template<class X> SmartPointer(const SmartPointer<X, BLOCKS> &pt) {
+	typedef typename cmp_size<sizeof(T),sizeof(X)>::same check;
 	refs = NULL;
 	*this = pt;
     }
@@ -80,7 +87,7 @@ public:
 	release();
 	refs = other.refs;
 	if (refs != NULL) (*refs)++;
-	t = other.t;
+	t = (T*)other.t;
 
 	return *this;
     }
