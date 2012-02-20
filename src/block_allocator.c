@@ -261,7 +261,8 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
 #endif
 }
 
-EXPORT INLINE void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) {
+EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) {
+    ba_b t;
     size_t n = 0;
 
     //fprintf(stderr, "page_size: %u, pages: %u\n", BA_PAGESIZE(a), a->num_pages);
