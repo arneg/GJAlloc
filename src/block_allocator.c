@@ -1,3 +1,6 @@
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -807,3 +810,7 @@ EXPORT void ba_remove_page(struct block_allocator * a,
     }
 #endif
 }
+
+#ifdef __cplusplus
+}
+#endif

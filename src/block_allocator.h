@@ -1,3 +1,6 @@
+#ifdef __cplusplus
+extern "C" {
+#endif
 #ifndef BLOCK_ALLOCATOR_H
 #define BLOCK_ALLOCATOR_H
 
@@ -82,17 +85,21 @@
 #endif
 
 #ifndef ba_error
-#include <stdio.h>
-#include <unistd.h>
+# ifdef __cplusplus
+#  define ba_error(fmt, x...)	throw fmt
+# else
+#  include <stdio.h>
+#  include <unistd.h>
 
 static inline void __error(int line, char * file, char * msg) {
     fprintf(stderr, "%s:%d\t%s\n", file, line, msg);
     _exit(1);
 }
-#define ba_error(x...)	do { snprintf(errbuf, 127, x); __error(__LINE__, __FILE__, errbuf); } while(0)
+#  define ba_error(x...)	do { snprintf(errbuf, 127, x); __error(__LINE__, __FILE__, errbuf); } while(0)
 
-#define BA_NEED_ERRBUF
+#  define BA_NEED_ERRBUF
 extern char errbuf[];
+# endif
 #endif
 
 #ifdef BA_DEBUG
@@ -121,8 +128,13 @@ struct ba_page {
     uint32_t used;
 };
 
+#ifdef __cplusplus
+#define ba_page ba_page *
+#define ba_block_header ba_block_header *
+#else
 typedef struct ba_page * ba_page;
 typedef struct ba_block_header * ba_block_header;
+#endif
 
 #ifdef BA_STATS
 struct block_alloc_stats {
@@ -419,3 +431,6 @@ label:								\
 #define PAGE_LOOP(a, C...)	LOW_PAGE_LOOP(a, XCONCAT(page_loop_label, __LINE__), C)
 
 #endif /* BLOCK_ALLOCATOR_H */
+#ifdef __cplusplus
+}
+#endif

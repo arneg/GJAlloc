@@ -1,12 +1,11 @@
 #ifndef BLOCK_ALLOCATOR_HH
+#include <new>
 #include <vector>
 #include <cassert>
 #include <iostream> // DEBUG
 //#define PHONY_ALLOC_SCHEME
 #ifndef PHONY_ALLOC_SCHEME
-extern "C" {
-# include "block_allocator.h"
-}
+#include "block_allocator.h"
 #endif
 #define BLOCK_ALLOCATOR_HH
 
@@ -73,5 +72,47 @@ public:
 
 	GJAlloc_Singleton<sizeof(T),BLOCKS>::deallocate(static_cast<void*>(p));
     }
+
+    void construct(pointer p, const T &val) {
+	std::cerr << "WARNING: construct has been called." << std::endl;
+	new ((void*)p) T(val);
+    }
+
+    void destroy(pointer p) {
+	((T*)p)->~T();
+    }
+
+    template <typename U> struct rebind {
+	typedef GJAlloc<U> other;
+    };
+
+    GJAlloc() throw() {
+	std::cerr << "GJAlloc()" << std::endl;
+    }
+    GJAlloc(const GJAlloc &a) throw() {
+	std::cerr << "GJAlloc(const GJAlloc&)" << std::endl;
+    }
+    template <typename U> GJAlloc(const GJAlloc<U> &a) throw() {
+	std::cerr << "GJAlloc(T -> U)" << std::endl;
+    }
+    ~GJAlloc() throw() {
+	std::cerr << "~GJAlloc()" << std::endl;
+    }
+
+    size_type max_size() {
+	return 1;
+    }
 };
+
+template <class T1, class T2>
+bool operator==(const GJAlloc<T1>&, const GJAlloc<T2>&) throw() {
+    return sizeof(T1)==sizeof(T2);
+}
+
+template <class T1, class T2>
+bool operator!=(const GJAlloc<T1>&, const GJAlloc<T2>&) throw() {
+    return sizeof(T1)!=sizeof(T2);
+}
+
+
 #endif
