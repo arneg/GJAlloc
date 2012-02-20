@@ -348,7 +348,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 			  ((~(uintptr_t)0) << (a->magnitude)));
     if (likely(p == a->alloc)) {
 #else
-    if (likely(BA_CHECK_PTR(a, a->alloc, ptr))) {
+    if (likely(a->alloc && BA_CHECK_PTR(a, a->alloc, ptr))) {
 #endif
 	INC(free_fast1);
 	((ba_block_header)ptr)->next = a->free_blk;
@@ -360,7 +360,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     INC(free_fast2);
 #else
 
-    if (BA_CHECK_PTR(a, a->last_free, ptr)) {
+    if (a->last_free && BA_CHECK_PTR(a, a->last_free, ptr)) {
 	p = a->last_free;
 	INC(free_fast2);
     } else {
