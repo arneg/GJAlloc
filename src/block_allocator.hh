@@ -3,7 +3,6 @@
 #include <vector>
 #include <cassert>
 #include <iostream> // DEBUG
-//#define PHONY_ALLOC_SCHEME
 #include "block_allocator.h"
 #define BLOCK_ALLOCATOR_HH
 
@@ -12,14 +11,25 @@ template <size_t BA_N, size_t BLOCKS> class GJAlloc_Singleton
 {
     struct MV {
 	block_allocator allocator;
+	long unsigned int cnt;
 
 	MV() {
-	    ba_init(&allocator, BA_N, BLOCKS);
+	    cnt = 0;
 	}
     };
     static MV mv;
 
 public:
+    static void register_alloc() {
+	if (unlikely(!mv.cnt++))
+	    ba_init(&mv.allocator, BA_N, BLOCKS);
+    }
+
+    static void unregister_alloc() {
+	if (unlikely(!--mv.cnt))
+	    ba_destroy(&mv.allocator);
+    }
+
     static void *allocate() {
 	return ba_alloc(&mv.allocator);
     }
@@ -82,14 +92,20 @@ public:
 	typedef GJAlloc<U> other;
     };
 
-    GJAlloc() throw() { }
+    GJAlloc() throw() {
+	GJAlloc_Singleton<sizeof(T),BLOCKS>::register_alloc();
+    }
     GJAlloc(const GJAlloc &a) throw() {
+	GJAlloc_Singleton<sizeof(T),BLOCKS>::register_alloc();
 	std::cerr << "GJAlloc(const GJAlloc&)" << std::endl;
     }
     template <typename U> GJAlloc(const GJAlloc<U> &a) throw() {
+	GJAlloc_Singleton<sizeof(T),BLOCKS>::register_alloc();
 	std::cerr << "GJAlloc(T -> U)" << std::endl;
     }
-    ~GJAlloc() throw() { }
+    ~GJAlloc() throw() {
+	GJAlloc_Singleton<sizeof(T),BLOCKS>::unregister_alloc();
+    }
 
     size_type max_size() {
 	return 1;
