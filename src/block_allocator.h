@@ -41,8 +41,8 @@ extern "C" {
     (head) = (o);				\
 } while(0)
 
-//#define BA_DEBUG
-//#define BA_USE_MEMALIGN
+/*#define BA_DEBUG*/
+/*#define BA_USE_MEMALIGN*/
 
 #ifdef HAS___BUILTIN_EXPECT
 #define likely(x)	(__builtin_expect((x), 1))
@@ -54,7 +54,7 @@ extern "C" {
 #define BA_MARK_FREE	0xF4337575
 #define BA_MARK_ALLOC	0x4110C375
 #define BA_ALLOC_INITIAL	8
-//#define BA_HASH_THLD		8
+/*#define BA_HASH_THLD		8 */
 #define BA_MAX_EMPTY		8
 
 #ifdef BA_DEBUG
@@ -343,7 +343,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     if (((ba_b)ptr)->magic == BA_MARK_FREE) {
 	BA_ERROR("double freed somethign\n");
     }
-    //memset(ptr, 0x75, a->block_size);
+    /*memset(ptr, 0x75, a->block_size);*/
     ((ba_b)ptr)->magic = BA_MARK_FREE;
 #endif
 
