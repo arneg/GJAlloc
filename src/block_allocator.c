@@ -716,6 +716,13 @@ EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
 	    return;
 	}
 	DOUBLE_UNLINK(a->first, p);
+#ifndef BA_CHAIN_PAGE
+	/* reset the internal list. this avoids fragmentation which would otherwise
+	 * happen when reusing pages. Since that is cheap here, we do it.
+	 */
+	p->first = BA_BLOCKN(a, p, 0);
+	p->first->next = BA_ONE;
+#endif
 	SINGLE_LINK(a->empty, p);
 	a->empty_pages ++;
     } else { // page was full
