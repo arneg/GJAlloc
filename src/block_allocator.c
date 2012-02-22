@@ -710,7 +710,6 @@ EXPORT void ba_low_alloc(struct block_allocator * a) {
 
 EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
     if (!p->used) {
-	ba_p cur, curm = 0;
 	INC(free_empty);
 	DOUBLE_UNLINK(a->first, p);
 #ifndef BA_CHAIN_PAGE
@@ -780,7 +779,6 @@ EXPORT void ba_find_page(struct block_allocator * a,
 
 EXPORT void ba_remove_page(struct block_allocator * a) {
     ba_p p;
-
     ba_p * c = &(a->empty), * max = c;
 
     while (*c) {
