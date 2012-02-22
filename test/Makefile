@@ -40,34 +40,54 @@ ba_system: files
 	${CC} $(LD_FLAGS) -DSYSTEM_ALLOC -o $@ test.c
 
 cpp:
-	mkdir cpp
+	test -d cpp || mkdir cpp
 
 c:
-	mkdir c
+	test -d c || mkdir c
 
 perf:
-	mkdir perf
+	test -d perf || mkdir perf
 
 cpp/test_%:	 test_%.hh test.cpp cpp
-	cat $< > a.in.c
+	cat $< >> a.in.c
 	echo "#line 1 \"test.cpp\"" >> a.in.c
 	cat test.cpp >> a.in.c
 	g++ $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
 	rm a.in.c
 cpp/list_%:	 test_%.hh test.cpp cpp
-	cat $< > a.in.c
+	cat $< >> a.in.c
 	echo "#line 1 \"list.cpp\"" >> a.in.c
 	cat list.cpp >> a.in.c
 	g++ $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
 	rm a.in.c
 c/test_%:	test_%.h test.c  c
-	cat $< > a.in.c
+	cat $< >> a.in.c
 	echo "#line 1 \"test.c\"" >> a.in.c
 	cat test.c >> a.in.c
 	gcc $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
 	rm a.in.c
 perf/test_%.dat: cpp/test_%
 	./$< > $@
+	for i in `seq 1 3`; do ./$< >> $@; done
+	pike compare.pike $@ > $@.tmp
+	mv $@.tmp $@
 
-perf/test.png: perf/test_gj.dat perf/test_std.dat perf/test_boost.dat perf/test_fsb.dat
-	gnuplot test.plot
+perf/test.png: perf/test_gj.dat perf/test_std.dat perf/test_boost.dat perf/test_fsb.dat perf/test_rt.dat
+	cp test.plot test.plot.tmp
+ifdef RANDOM
+	sed -i -e s/__YMAX__/350/ test.plot.tmp
+else
+	sed -i -e s/__YMAX__/70/ test.plot.tmp
+endif
+	gnuplot test.plot.tmp
+	rm test.plot.tmp
+
+perf/Random.png: perf
+	$(MAKE) RANDOM=1 X="$(X) -DRANDOM" perf/test.png -B
+	mv perf/test.png perf/Random.png
+
+perf/Linear.png: perf
+	$(MAKE) perf/test.png -B
+	mv perf/test.png perf/Linear.png
+	
+
