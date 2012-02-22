@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <malloc.h>
 
 #define M 14000000
 #define N 14000000
@@ -34,7 +35,12 @@ void shuffle(uint32_t * array, size_t n)
 void **p;
 size_t mdiff = 0, fdiff = 0;
 uint32_t num_pages = 0;
+size_t bytes = 0, bytes_base;
 TEST_INIT(foo);
+
+static inline size_t used_bytes(const struct mallinfo info) {
+    return (size_t)info.uordblks + (size_t)info.hblkhd;
+}
 
 long int run2(long int n, uint32_t * shuffler) {
     long int i, j;
@@ -46,7 +52,6 @@ long int run2(long int n, uint32_t * shuffler) {
 	for (j = 0; j < n; j++) {
 	    p[j] = TEST_ALLOC(foo);
 	}
-	TEST_NUM_PAGES(foo, num_pages);
 	for (j = 0; j < n; j++) {
 	    long int k = shuffler[j];
 	    TEST_FREE(foo, p[k]);
@@ -54,6 +59,17 @@ long int run2(long int n, uint32_t * shuffler) {
     }
     clock_gettime(CLOCK_MONOTONIC, &t2);
     mdiff += diff(t1, t2);
+
+    // get memory use
+    for (j = 0; j < n; j++) {
+	p[j] = TEST_ALLOC(foo);
+    }
+    TEST_NUM_PAGES(foo, num_pages);
+    bytes = used_bytes(mallinfo()) - bytes_base;
+    for (j = 0; j < n; j++) {
+	long int k = shuffler[j];
+	TEST_FREE(foo, p[k]);
+    }
 
     return runs * n;
 }
@@ -73,6 +89,12 @@ int main(int argc, char ** argv) {
 # endif
 #endif
 
+    bytes_base = used_bytes(mallinfo());
+
+#ifdef DYNAMIC_INIT
+    DYNAMIC_INIT(foo);
+#endif
+
     for (i = 0; i < N; i++)
 	map[i] = i;
     for (i = 10; i < M; i *= 2) {
@@ -82,7 +104,7 @@ int main(int argc, char ** argv) {
 	shuffle(map, i);
 #endif
 	n = run2(i, map);
-	printf("% 10d\t%.1f\t%u\n", i, (double)mdiff/(n), num_pages);
+	printf("%ld\t%.1f\t%lu\t%u\n", i, (double)mdiff/(n), bytes, num_pages);
     }
 
     TEST_DEINIT(foo);

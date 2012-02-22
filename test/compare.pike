@@ -148,8 +148,8 @@ Value combine_values(array(Value) a) {
 }
 
 
-mapping(int:Value) parse_raw(string s) {
-    mapping(int:mixed) m = ([]);
+mapping(int:array(Value)) parse_raw(string s) {
+    mapping(int:mixed) m = ([]), mb = ([]);
     array(string) a = s/"\n";
     if (a[-1] == "") a = a[..sizeof(a)-2];
     
@@ -157,26 +157,31 @@ mapping(int:Value) parse_raw(string s) {
 	array(string) tmp = a[i]/"\t";
 	int n = (int)tmp[0];
 	float t = (float)tmp[1];
-	if (!m[n]) 
+	int bytes = (int)tmp[2];
+	if (!m[n]) {
 	    m[n] = ({ });
+	    mb[n] = ({ });
+	}
 	m[n] += ({ Value(t) });
+	mb[n] += ({ Value(bytes) });
     }
 
     foreach (m; int n; array t) {
-	m[n] = combine_values(t);
+	m[n] = ({ combine_values(t), combine_values(mb[n]) });
     }
 
     return m;
 }
 
 int main(int argc, array(string) argv) {
-    mapping(int:Value) m;
+    mapping(int:array(Value)) m;
 
 
     m = parse_raw(Stdio.read_file(argv[1]));
 
     foreach (sort(indices(m));; int n) {
-	write("%d\t%f\n", n, m[n]);
+	array a = m[n];
+	write("%d\t%f\t%f\n", n, a[0], a[1]);
     }
 
     return 0;
