@@ -4,6 +4,7 @@ LD_FLAGS=-lrt
 X=
 GCC=gcc -O3 -msse -msse2 -mssse3 -msse4.1 -msse4.2 -I../src
 GCC=gcc -O3 -I../src
+NUM=3
 
 CC=gcc -O3 -msse $(X) $(LD_FLAGS)
 CXX=g++ -O3 -msse $(X) $(LD_FLAGS)
@@ -90,13 +91,13 @@ cpp/list_%:	 test_%.hh test.cpp cpp
 
 perf/test_%.dat: cpp/test_%
 	./$< > $@
-	for i in `seq 1 1`; do ./$< >> $@; done
+	for i in `seq 1 $(NUM)`; do ./$< >> $@; done
 	pike compare.pike $@ > $@.tmp
 	mv $@.tmp $@
 
 perf/test_cha.dat: c/test_cha
 	./$< > $@
-	for i in `seq 1 1`; do ./$< >> $@; done
+	for i in `seq 1 $(NUM)`; do ./$< >> $@; done
 	pike compare.pike $@ > $@.tmp
 	mv $@.tmp $@
 
