@@ -54,7 +54,7 @@
 
 ## Usage in C++
 
-  GJAlloc comes with std:allocator compatible template definitions. It can
+  GJAlloc comes with `std::allocator` compatible template definitions. It can
   allocate one chunk at a time only (for use in `std::list`, `std::set`
   and `std::map`).
 
