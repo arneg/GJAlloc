@@ -1,25 +1,25 @@
-==== GJAlloc ====
+# GJAlloc
 
   GJAlloc is a fixed size block allocator implementation for C. It can
   improve performance of applications that allocate many (small) blocks of
   equal size. The allocator has no overhead per individual block. The minimum
-  block size is sizeof(void*) and allocators initialized with a block size
-  smaller than that will use blocks of size sizeof(void*) implicitly.
+  block size is `sizeof(void*)` and allocators initialized with a block size
+  smaller than that will use blocks of size `sizeof(void*)` implicitly.
 
   GJAlloc comes in two different internal algorithms. One uses aligned pages
   to minimize the cost of deallocations. It can be activated by defining
-  BA_USE_MEMALIGN. It is optimized for speed and can crash when passing a
-  bad pointer to ba_free(). It also does not make any effort to detect other
+  `BA_USE_MEMALIGN`. It is optimized for speed and can crash when passing a
+  bad pointer to `ba_free()`. It also does not make any effort to detect other
   misuse, like double frees.
   The second algorithm uses unaligned pages and a hash table to locate pages.
   It offers some fault detection. Performance may vary between the two,
   depending on architecture and application. Good luck!
 
-  When debugging it is advised to compile with BA_DEBUG which will detect
+  When debugging it is advised to compile with `BA_DEBUG` which will detect
   double frees and many cases of bad memory access in blocks that have been
   freed.
 
-==== Usage in C ====
+## Usage in C
 
     #include "block_allocator.h"
 
@@ -52,11 +52,11 @@
      * Same as ba_free_all() but also frees all internally used memory.
      */
 
-==== Usage in C++ ====
+## Usage in C++
 
   GJAlloc comes with std:allocator compatible template definitions. It can
-  allocate one chunk at a time only (for use in std::list, std::set
-  and std::map).
+  allocate one chunk at a time only (for use in `std::list`, `std::set`
+  and `std::map`).
 
     #include "block_allocator.hh"
 
