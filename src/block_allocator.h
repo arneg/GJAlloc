@@ -241,7 +241,7 @@ EXPORT void ba_low_alloc(struct block_allocator * a);
 EXPORT void ba_find_page(struct block_allocator * a,
 			      const void * ptr);
 #endif
-EXPORT void ba_remove_page(struct block_allocator * a, ba_p p);
+EXPORT void ba_remove_page(struct block_allocator * a);
 #ifdef BA_DEBUG
 EXPORT void ba_print_htable(const struct block_allocator * a);
 EXPORT void ba_check_allocator(struct block_allocator * a, char*, char*, int);

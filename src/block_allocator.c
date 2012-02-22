@@ -710,11 +710,9 @@ EXPORT void ba_low_alloc(struct block_allocator * a) {
 
 EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
     if (!p->used) {
+	ba_p cur, curm = 0;
+	size_t curc = 0, curmc = 0;
 	INC(free_empty);
-	if (a->empty_pages == a->max_empty_pages) {
-	    ba_remove_page(a, p);
-	    return;
-	}
 	DOUBLE_UNLINK(a->first, p);
 #ifndef BA_CHAIN_PAGE
 	/* reset the internal list. this avoids fragmentation which would otherwise
@@ -725,6 +723,10 @@ EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
 #endif
 	SINGLE_LINK(a->empty, p);
 	a->empty_pages ++;
+	if (a->empty_pages >= a->max_empty_pages) {
+	    ba_remove_page(a);
+	    return;
+	}
     } else { /* page was full */
 	INC(free_full);
 #ifdef BA_USE_MEMALIGN
@@ -777,7 +779,21 @@ EXPORT void ba_find_page(struct block_allocator * a,
 }
 #endif
 
-EXPORT void ba_remove_page(struct block_allocator * a, ba_p p) {
+EXPORT void ba_remove_page(struct block_allocator * a) {
+    ba_p p;
+
+    ba_p * c = &(a->empty), * max = c;
+
+    while (*c) {
+	if (*c > *max) {
+	    max = c;
+	}
+	c = &((*c)->next);
+    }
+
+    p = *max;
+    *max = (*max)->next;
+
 #ifdef BA_DEBUG
     ba_check_allocator(a, "ba_remove_page", __FILE__, __LINE__);
     if (a->empty_pages < a->max_empty_pages) {
@@ -805,8 +821,6 @@ EXPORT void ba_remove_page(struct block_allocator * a, ba_p p) {
     /* we know that p == a->last_free */
     a->last_free = NULL;
 #endif
-
-    DOUBLE_UNLINK(a->first, p);
 
 #ifdef BA_DEBUG
     memset(p, 0, sizeof(struct ba_page));
