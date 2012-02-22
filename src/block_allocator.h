@@ -255,7 +255,11 @@ EXPORT void ba_destroy(struct block_allocator * a);
 
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
 #define BA_BLOCKN(a, p, n) ((ba_b)(((char*)(p+1)) + (n)*((a)->block_size)))
-#define BA_CHECK_PTR(a, p, ptr)	((size_t)((char*)ptr - (char*)(p)) <= (a)->offset)
+#if defined(BA_DEBUG) || !defined(BA_CRAZY)
+# define BA_CHECK_PTR(a, p, ptr)	((p) && (size_t)((char*)ptr - (char*)(p)) <= (a)->offset)
+#else
+# define BA_CHECK_PTR(a, p, ptr)	((size_t)((char*)ptr - (char*)(p)) <= (a)->offset)
+#endif
 #define BA_LASTBLOCK(a, p) ((ba_b)((char*)p + (a)->offset))
 
 #ifdef BA_STATS
@@ -355,7 +359,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 			  ((~(uintptr_t)0) << (a->magnitude)));
     if (likely(p == a->alloc)) {
 #else
-    if (likely(a->alloc && BA_CHECK_PTR(a, a->alloc, ptr))) {
+    if (likely(BA_CHECK_PTR(a, a->alloc, ptr))) {
 #endif
 	INC(free_fast1);
 	((ba_b)ptr)->next = a->free_blk;
@@ -367,7 +371,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     INC(free_fast2);
 #else
 
-    if (a->last_free && BA_CHECK_PTR(a, a->last_free, ptr)) {
+    if (BA_CHECK_PTR(a, a->last_free, ptr)) {
 	p = a->last_free;
 	INC(free_fast2);
     } else {
