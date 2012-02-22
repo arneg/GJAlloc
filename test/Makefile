@@ -76,7 +76,7 @@ cpp/test_gj: cpp/test_gj.cpp
 cpp/test_rt: cpp/test_rt.cpp
 	$(CXX) -Irtalloc rtalloc/rtAllocator.cpp $< -o $@
 
-c/test_gj: cpp/test_gj.c
+c/test_gj: c/test_gj.c
 	$(CC) -I../src ../src/block_allocator.c $< -o $@
 
 c/test_cha: c/test_cha.c
