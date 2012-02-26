@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <malloc.h>
+#ifndef NO_MEM_USAGE
+# include <malloc.h>
+#endif
 
 #define M 14000000
 #define N 14000000
@@ -38,9 +40,11 @@ uint32_t num_pages = 0;
 size_t bytes = 0, bytes_base;
 TEST_INIT(foo);
 
+#ifndef NO_MEM_USAGE
 static inline size_t used_bytes(const struct mallinfo info) {
     return (size_t)info.uordblks + (size_t)info.hblkhd;
 }
+#endif
 
 long int run2(long int n, uint32_t * shuffler) {
     long int i, j;
@@ -65,7 +69,9 @@ long int run2(long int n, uint32_t * shuffler) {
 	p[j] = TEST_ALLOC(foo);
     }
     TEST_NUM_PAGES(foo, num_pages);
+#ifndef NO_MEM_USAGE
     bytes = used_bytes(mallinfo()) - bytes_base;
+#endif
     for (j = 0; j < n; j++) {
 	long int k = shuffler[j];
 	TEST_FREE(foo, p[k]);
@@ -89,7 +95,9 @@ int main(int argc, char ** argv) {
 # endif
 #endif
 
+#ifndef NO_MEM_USAGE
     bytes_base = used_bytes(mallinfo());
+#endif
 
 #ifdef DYNAMIC_INIT
     DYNAMIC_INIT(foo);
