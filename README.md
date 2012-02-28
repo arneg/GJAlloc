@@ -40,6 +40,9 @@
     void * ba_alloc(block_allocator * allocator)
     void ba_free(block_allocator * allocator, void * ptr)
 
+  Use these functions to request blocks from or release blocks to the
+  allocator.
+
     void ba_free_all(block_allocator * allocator)
 
   Frees all blocks (and pages) allocated in `allocator`. `ba_alloc` can still
