@@ -25,15 +25,15 @@
 
     block_allocator allocator = BA_INIT(block_size, blocks);
 
-  A block allocator struct can be initialized using the `BA_INIT` macro.
-  Alternatively, `ba_init` can be used.
+  A block allocator struct can be initialized using the `BA_INIT()` macro.
+  Alternatively, `ba_init()` can be used.
 
     block_allocator allocator;
     void ba_init(block_allocator * allocator, uint32_t block_size, uint32_t blocks)
 
   The parameter `block_size` is the size of the individual blocks returned
-  from the allocator on calls to `ba_alloc`. `blocks` can be used to set the
-  number of blocks that are allocated in one page. Note that `blocks` is
+  from the allocator on calls to `ba_alloc()`. `blocks` can be used to set
+  the number of blocks that are allocated in one page. Note that `blocks` is
   in both cases merely a hint. `ba_init` tries to adjust the pages as to fit
   into integer multiples of the memory page size. 
 
@@ -42,12 +42,12 @@
 
     void ba_free_all(block_allocator * allocator)
 
-  Frees all blocks (and pages) allocated in `allocator`. `ba_alloc` can still
-  be used to allocate new blocks.
+  Frees all blocks (and pages) allocated in `allocator`. `ba_alloc()` can
+  still be used to allocate new blocks.
 
     void ba_destroy(block_allocator * allocator)
 
-  Same as ba_free_all() but also frees all internally used memory.
+  Same as `ba_free_all()` but also frees all internally used memory.
 
 ## Usage in C++
 
