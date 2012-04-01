@@ -21,6 +21,21 @@
 
   GJAlloc was initially developed for use in [pike](http://pike.ida.liu.se).
 
+## Installation
+
+  If you cloned this from git, you will need to
+
+    aclocal
+    autoconf
+    libtoolize
+    automake --add-missing
+
+  Then (or if you just got a tarball)
+
+    ./configure
+    make
+    make install
+
 ## Usage in C
 
     #include "block_allocator.h"

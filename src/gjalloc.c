@@ -10,7 +10,7 @@ extern "C" {
 # include <mcheck.h>
 #endif
 
-#include "block_allocator.h"
+#include "gjalloc.h"
 
 
 #ifdef BA_NEED_ERRBUF
