@@ -13,7 +13,11 @@
   misuse, like double frees.
   The second algorithm uses unaligned pages and a hash table to locate pages.
   It offers some fault detection. Performance may vary between the two,
-  depending on architecture and application. Good luck!
+  depending on architecture and application. A performance comparison of the
+  second algorithm with a couple of widely used fixed size block allocator
+  libraries can be found in the
+  [wiki](https://github.com/arneg/GJAlloc/wiki/Performance-comparison). Good
+  luck!
 
   When debugging it is advised to compile with `BA_DEBUG` which will detect
   double frees and many cases of bad memory access in blocks that have been
