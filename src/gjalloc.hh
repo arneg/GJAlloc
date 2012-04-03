@@ -3,7 +3,7 @@
 #include <vector>
 #include <cassert>
 #include <iostream> // DEBUG
-#include "block_allocator.h"
+#include "gjalloc.h"
 #define BLOCK_ALLOCATOR_HH
 
 
