@@ -92,7 +92,13 @@ perf/test_cha.dat: c/test_cha
 	pike compare.pike $@ > $@.tmp
 	mv $@.tmp $@
 
-perf/test.png: perf/test_gj.dat perf/test_std.dat perf/test_boost.dat perf/test_fsb.dat perf/test_rt.dat perf/test_cha.dat
+perf/test_system.dat: c/test_system
+	./$< > $@
+	for i in `seq 1 $(NUM)`; do ./$< >> $@; done
+	pike compare.pike $@ > $@.tmp
+	mv $@.tmp $@
+
+perf/test.png: perf/test_gj.dat perf/test_std.dat perf/test_boost.dat perf/test_fsb.dat perf/test_rt.dat perf/test_cha.dat perf/test_system.dat
 	cp test.plot test.plot.tmp
 ifdef RANDOM
 	sed -i -e s/__YMAX__/350/ test.plot.tmp
