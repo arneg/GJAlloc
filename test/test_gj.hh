@@ -1,4 +1,4 @@
-#include "block_allocator.hh"
+#include "gjalloc.hh"
 #define TEST_CLASS(t)	GJAlloc<t>
 #define TEST_INIT(t)	TEST_CLASS(t) * a
 #define DYNAMIC_INIT(t)	a = new TEST_CLASS(t)
