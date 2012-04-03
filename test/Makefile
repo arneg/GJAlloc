@@ -25,22 +25,13 @@ clean:
 	- rm -f alloc.o alloc2.o ba_system ba_segregate ba_dsegregate
 
 
-files: test.c ../src/block_allocator.c ../src/block_allocator.h alloc.o alloc2.o
+files: test.c ../src/gjalloc.c ../src/gjalloc.h alloc.o alloc2.o
 
 
-alloc.o: ../src/block_allocator.c ../src/block_allocator.h Makefile
+alloc.o: ../src/gjalloc.c ../src/gjalloc.h Makefile
 	$(CC) $X -o $@ -c $<
-alloc2.o: ../src/block_allocator.c ../src/block_allocator.h Makefile
+alloc2.o: ../src/gjalloc.c ../src/gjalloc.h Makefile
 	$(CC) -DBA_USE_MEMALIGN $X -o $@ -c $<
-
-ba_segregate: files
-	${CC} $(LD_FLAGS) $X -DBA_SEGREGATE -o $@ test.c alloc.o
-
-ba_dsegregate: files
-	${CC} $(LD_FLAGS) $X -DBA_SEGREGATE -DBA_USE_MEMALIGN -o $@ test.c alloc2.o
-
-ba_system: files
-	${CC} $(LD_FLAGS) -DSYSTEM_ALLOC -o $@ test.c
 
 cpp:
 	test -d cpp || mkdir cpp
@@ -71,13 +62,13 @@ cpp/test_fsb: cpp/test_fsb.cpp
 	$(CXX) -IFSBAlloc $< -o $@
 
 cpp/test_gj: cpp/test_gj.cpp
-	$(CXX) -I../src ../src/block_allocator.c $< -o $@
+	$(CXX) -I../src ../src/gjalloc.c $< -o $@
 
 cpp/test_rt: cpp/test_rt.cpp
 	$(CXX) -Irtalloc rtalloc/rtAllocator.cpp $< -o $@
 
 c/test_gj: c/test_gj.c
-	$(CC) -I../src ../src/block_allocator.c $< -o $@
+	$(CC) -I../src ../src/gjalloc.c $< -o $@
 
 c/test_cha: c/test_cha.c
 	$(CC) -Ichalloc challoc/challoc.c $< -o $@
@@ -86,7 +77,7 @@ cpp/list_%:	 test_%.hh test.cpp cpp
 	cat $< > a.in.c
 	echo "#line 1 \"list.cpp\"" >> a.in.c
 	cat list.cpp >> a.in.c
-	g++ $X -I../src -O3 -o $@ ../src/block_allocator.c a.in.c -lrt
+	g++ $X -I../src -O3 -o $@ ../src/gjalloc.c a.in.c -lrt
 	rm a.in.c
 
 perf/test_%.dat: cpp/test_%
