@@ -42,7 +42,6 @@ extern "C" {
 } while(0)
 
 /*#define BA_DEBUG*/
-/*#define BA_USE_MEMALIGN*/
 
 #ifdef HAS___BUILTIN_EXPECT
 #define likely(x)	(__builtin_expect((x), 1))
@@ -103,13 +102,9 @@ extern char errbuf[];
 #endif
 
 #ifdef BA_DEBUG
-# ifdef BA_USE_MEMALIGN
-#  define BA_ERROR(x...)	do { fprintf(stderr, "ERROR at %s:%d\n", __FILE__, __LINE__); ba_show_pages(a); ba_error(x); } while(0)
-# else
-#  define BA_ERROR(x...)	do { fprintf(stderr, "ERROR at %s:%d\n", __FILE__, __LINE__); ba_print_htable(a); ba_show_pages(a); ba_error(x); } while(0)
-# endif
+# define BA_ERROR(x...)	do { fprintf(stderr, "ERROR at %s:%d\n", __FILE__, __LINE__); ba_print_htable(a); ba_show_pages(a); ba_error(x); } while(0)
 #else
-#define BA_ERROR(x...)	do { ba_error(x); } while(0)
+# define BA_ERROR(x...)	do { ba_error(x); } while(0)
 #endif
 
 struct ba_block_header {
@@ -122,9 +117,7 @@ struct ba_block_header {
 struct ba_page {
     struct ba_block_header * first;
     struct ba_page *next, *prev;
-#ifndef BA_USE_MEMALIGN
     struct ba_page *hchain;
-#endif
     uint32_t used;
 };
 
@@ -155,35 +148,18 @@ struct block_alloc_stats {
 #endif
 
 struct block_allocator {
-#ifdef BA_USE_MEMALIGN
-    uint32_t block_size;
-    uint32_t magnitude;
-#else
     size_t offset;
-#endif
     ba_b free_blk; /* next free blk in alloc */
     ba_p alloc; /* current page used for allocating */
-#ifndef BA_USE_MEMALIGN
     ba_p last_free;
-#endif
-#ifdef BA_USE_MEMALIGN
-    size_t offset;
-#else
     uint32_t block_size;
     uint32_t magnitude;
-#endif
     ba_p first; /* doube linked list of other pages (!free,!full,!alloc) */
-#ifndef BA_USE_MEMALIGN
     ba_p * pages;
-#else
-    ba_p full; /* doube linked list of full pages */
-#endif
     ba_p empty; /* single linked list of empty pages */
     uint32_t empty_pages, max_empty_pages;
     uint32_t blocks;
-#ifndef BA_USE_MEMALIGN
     uint32_t allocated;
-#endif
     uint32_t num_pages;
     char * blueprint;
 #ifdef BA_STATS
@@ -191,24 +167,6 @@ struct block_allocator {
 #endif
 };
 typedef struct block_allocator block_allocator;
-#ifdef BA_USE_MEMALIGN
-#define BA_INIT(block_size, blocks, name...) {\
-    block_size/*block_size*/,\
-    0/*magnitude*/,\
-    NULL/*free_blk*/,\
-    NULL/*alloc*/,\
-    0/*offset*/,\
-    NULL/*first*/,\
-    NULL/*full*/,\
-    NULL/*empty*/,\
-    0/*empty_pages*/,\
-    BA_MAX_EMPTY/*max_empty_pages*/,\
-    blocks/*blocks*/,\
-    0/*num_pages*/,\
-    NULL/*blueprint*/,\
-    BA_INIT_STATS(block_size, blocks, name)\
-}
-#else
 #define BA_INIT(block_size, blocks, name...) {\
     0/*offset*/,\
     NULL/*free_blk*/,\
@@ -227,7 +185,6 @@ typedef struct block_allocator block_allocator;
     NULL/*blueprint*/,\
     BA_INIT_STATS(block_size, blocks, name)\
 }
-#endif
 
 #define BA_ONE	((ba_b)1)
 
@@ -237,10 +194,8 @@ EXPORT void ba_show_pages(const struct block_allocator * a);
 EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 			 uint32_t blocks);
 EXPORT void ba_low_alloc(struct block_allocator * a);
-#ifndef BA_USE_MEMALIGN
 EXPORT void ba_find_page(struct block_allocator * a,
 			      const void * ptr);
-#endif
 EXPORT void ba_remove_page(struct block_allocator * a);
 #ifdef BA_DEBUG
 EXPORT void ba_print_htable(const struct block_allocator * a);
@@ -317,9 +272,7 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 #ifdef BA_STATS
     if (++s->st_used > s->st_max) {
       s->st_max = s->st_used;
-#ifndef BA_USE_MEMALIGN
       s->st_max_allocated = a->allocated;
-#endif
       s->st_max_pages = a->num_pages;
       s->st_mallinfo = mallinfo();
     }
@@ -354,22 +307,13 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 #ifdef BA_STATS
     a->stats.st_used--;
 #endif
-#ifdef BA_USE_MEMALIGN
-    p = (ba_p)((uintptr_t)ptr &
-			  ((~(uintptr_t)0) << (a->magnitude)));
-    if (likely(p == a->alloc)) {
-#else
     if (likely(BA_CHECK_PTR(a, a->alloc, ptr))) {
-#endif
 	INC(free_fast1);
 	((ba_b)ptr)->next = a->free_blk;
 	a->free_blk = (ba_b)ptr;
 	return;
     }
 
-#ifdef BA_USE_MEMALIGN
-    INC(free_fast2);
-#else
 
     if (BA_CHECK_PTR(a, a->last_free, ptr)) {
 	p = a->last_free;
@@ -378,7 +322,6 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	ba_find_page(a, ptr);
 	p = a->last_free;
     }
-#endif
     ((ba_b)ptr)->next = p->first;
     p->first = (ba_b)ptr;
     if ((--p->used) && (((ba_b)ptr)->next)) {
@@ -394,30 +337,13 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 
 #define MS(x)	#x
 
-#ifdef BA_USE_MEMALIGN
-#define LOW_PAGE_LOOP2(a, label, C...)	do {			\
-    char __c = 4;						\
-    const ba_p T[4] = { a->full, a->first, a->alloc, a->empty };	\
-    ba_p p;							\
-    retry ## label:						\
-    p = T[__c-1];						\
-    while (p) {							\
-	ba_p t = p->next;					\
-	do { C; goto SURVIVE ## label; } while(0);		\
-	goto label; SURVIVE ## label: p = t;			\
-    }								\
-    if (--__c) goto retry ## label;				\
-label:								\
-    0;								\
-} while (0)
-#else
 /* goto considered harmful */
 #define LOW_PAGE_LOOP2(a, label, C...)	do {			\
     uint32_t __n;						\
     for (__n = 0; __n < a->allocated; __n++) {			\
-	ba_p p = a->pages[__n];				\
+	ba_p p = a->pages[__n];					\
 	while (p) {						\
-	    ba_p t = p->hchain;				\
+	    ba_p t = p->hchain;					\
 	    do { C; goto SURVIVE ## label; } while(0);		\
 	    goto label; SURVIVE ## label: p = t;		\
 	}							\
@@ -425,7 +351,6 @@ label:								\
 label:								\
     0;								\
 } while(0)
-#endif
 #define LOW_PAGE_LOOP(a, l, C...)	LOW_PAGE_LOOP2(a, l, C)
 #define PAGE_LOOP(a, C...)	LOW_PAGE_LOOP(a, XCONCAT(page_loop_label, __LINE__), C)
 
