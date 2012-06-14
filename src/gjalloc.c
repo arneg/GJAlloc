@@ -21,10 +21,11 @@ static INLINE void ba_htable_insert(const struct block_allocator * a,
 				    ba_p ptr);
 static INLINE void ba_htable_grow(struct block_allocator * a);
 
-#define BA_NBLOCK(a, p, ptr)	((uintptr_t)((char*)ptr - (char)(p+1))/(a)->block_size)
+#define BA_NBLOCK(a, p, ptr)	((uintptr_t)((char*)ptr - (char)(p+1))/(a)->l.block_size)
 
 #define BA_DIVIDE(a, b)	    ((a) / (b) + (!!((a) & ((b)-1))))
-#define BA_PAGESIZE(a)	    (sizeof(struct ba_page) + (a)->blocks * (a)->block_size) 
+#define BA_PAGESIZE(a)	    (sizeof(struct ba_page)			\
+			     + (a)->l.offset + (a)->l.block_size) 
 #define BA_HASH_MASK(a)  (((a->allocated)) - 1)
 
 #define BA_BYTES(a)	( (sizeof(ba_p) * ((a)->allocated) ) )
@@ -48,7 +49,7 @@ EXPORT void ba_show_pages(const struct block_allocator * a) {
 	uint32_t blocks_used;
 	blocks_used = p->used;
 	fprintf(stderr, "(%p)\t%f\t(%u %d) --> (prev: %p | next: %p)\n",
-		p, blocks_used/(double)a->blocks * 100,
+		p, blocks_used/(double)a->l.blocks * 100,
 		blocks_used,
 		blocks_used,
 		p->prev, p->next);
@@ -77,8 +78,8 @@ EXPORT void ba_print_stats(struct block_allocator * a) {
     int i;
     double all;
     struct block_alloc_stats * s = &a->stats;
-    size_t used = s->st_max * a->block_size;
-    size_t malloced = s->st_max_pages * (a->block_size * a->blocks);
+    size_t used = s->st_max * a->l.block_size;
+    size_t malloced = s->st_max_pages * (a->l.block_size * a->l.blocks);
     size_t overhead = s->st_max_pages * sizeof(struct ba_page);
     int mall = s->st_mallinfo.uordblks;
     int moverhead = s->st_mallinfo.fordblks;
@@ -94,8 +95,8 @@ EXPORT void ba_print_stats(struct block_allocator * a) {
 	   s->st_max_pages, overhead / 1024.0,
 	   mall / 1024.0,
 	   moverhead / 1024.0,
-	   a->block_size * a->blocks,
-	   a->block_size
+	   a->l.block_size * a->l.blocks,
+	   a->l.block_size
 	   );
     all = ((a->stats.free_fast1 + a->stats.free_fast2 + a->stats.find_linear + a->stats.find_hash + a->stats.free_empty + a->stats.free_full));
     if (all == 0.0) return;
@@ -111,18 +112,6 @@ EXPORT void ba_print_stats(struct block_allocator * a) {
 #endif
 
 /* #define BA_ALIGNMENT	8 */
-static INLINE uint32_t round_up32_(uint32_t v) {
-    v |= v >> 1; /* first round down to one less than a power of 2 */
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    return v;
-}
-
-static INLINE uint32_t round_up32(const uint32_t v) {
-    return round_up32_(v)+1;
-}
 
 #ifndef BA_CMEMSET
 static INLINE void cmemset(char * dst, char * src, size_t s,
@@ -154,7 +143,8 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 
     if (!blocks) blocks = 512;
 
-    page_size = block_size * blocks + BLOCK_HEADER_SIZE;
+    ba_init_layout(&a->l, block_size, blocks);
+    ba_align_layout(&a->l);
 
     a->empty = a->first = NULL;
     a->last_free = NULL;
@@ -164,25 +154,11 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 	    blocks, block_size, page_size);
 #endif
 
-    /* is not multiple of memory page size */
-    if ((page_size & (page_size - 1))) {
-	page_size = round_up32(page_size);
-    }
-    a->blocks = (page_size - BLOCK_HEADER_SIZE)/block_size;
-    a->offset = sizeof(struct ba_page) + (a->blocks - 1) * block_size;
-#ifdef BA_DEBUG
-    fprintf(stderr, "blocks: %u block_size: %u page_size: %u mallocing size: %lu, next pages: %u\n",
-	    a->blocks, block_size, blocks * block_size,
-	    BA_PAGESIZE(a)+sizeof(struct ba_page),
-	    round_up32(BA_PAGESIZE(a)+sizeof(struct ba_page)));
-#endif
-
 
 #ifndef ctz32
 # define ctz32 __builtin_ctz
 #endif
-    a->magnitude = (uint16_t)ctz32(page_size); 
-    a->block_size = block_size;
+    a->magnitude = ctz32(round_up32(BA_PAGESIZE(a))); 
     a->num_pages = 0;
     a->empty_pages = 0;
     a->max_empty_pages = BA_MAX_EMPTY;
@@ -192,6 +168,14 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
     a->pages = (ba_p*)malloc(BA_ALLOC_INITIAL * sizeof(ba_p));
     if (!a->pages) ba_error("nomem");
     memset(a->pages, 0, BA_ALLOC_INITIAL * sizeof(ba_p));
+
+#ifdef BA_DEBUG
+    fprintf(stderr, " -> blocks: %u block_size: %u page_size: %u mallocing size: %lu, next pages: %u magnitude: %u\n",
+	    a->l.blocks, block_size, BA_PAGESIZE(a)-sizeof(struct ba_page),
+	    BA_PAGESIZE(a),
+	    round_up32(BA_PAGESIZE(a)),
+	    a->magnitude);
+#endif
 }
 
 static INLINE void ba_free_page(struct block_allocator * a, ba_p p) {
@@ -199,7 +183,7 @@ static INLINE void ba_free_page(struct block_allocator * a, ba_p p) {
     p->used = 0;
 
     if (a->blueprint)
-	BA_CMEMSET((char*)(p+1), (char*)a->blueprint, a->block_size, a->blocks);
+	BA_CMEMSET((char*)(p+1), (char*)a->blueprint, a->l.block_size, a->l.blocks);
 
 #ifdef BA_CHAIN_PAGE
     do {
@@ -210,8 +194,8 @@ static INLINE void ba_free_page(struct block_allocator * a, ba_p p) {
 	    MEM_RW(((ba_b)ptr)->magic);
 	    ((ba_b)ptr)->magic = BA_MARK_FREE;
 #endif
-	    ((ba_b)ptr)->next = (ba_b)(ptr+a->block_size);
-	    ptr+=a->block_size;
+	    ((ba_b)ptr)->next = (ba_b)(ptr+a->l.block_size);
+	    ptr+=a->l.block_size;
 	}
 	BA_LASTBLOCK(a, p)->next = NULL;
     } while (0);
@@ -251,11 +235,11 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) 
 
     t = a->free_blk;
     if (t) {
-	n += a->blocks;
+	n += a->l.blocks;
 	while (t) {
 	    n--;
 	    if (t->next == BA_ONE) {
-		t = (ba_b)(((char*)t) + a->block_size);
+		t = (ba_b)(((char*)t) + a->l.block_size);
 		t->next = (ba_b)(size_t)!(t == BA_LASTBLOCK(a, a->alloc));
 	    } else {
 		t = t->next;
@@ -295,7 +279,7 @@ static INLINE void ba_grow(struct block_allocator * a) {
 	}
 	ba_htable_grow(a);
     } else {
-	ba_init(a, a->block_size, a->blocks);
+	ba_init(a, a->l.block_size, a->l.blocks);
     }
 #ifdef BA_DEBUG
     ba_check_allocator(a, "ba_grow", __FILE__, __LINE__);
@@ -578,7 +562,7 @@ EXPORT void ba_low_alloc(struct block_allocator * a) {
 #endif
     if (a->alloc) {
 	a->alloc->first = NULL;
-	a->alloc->used = a->blocks;
+	a->alloc->used = a->l.blocks;
     }
 
     if (a->first) {

@@ -125,6 +125,10 @@ struct ba_page {
 typedef struct ba_page * ba_p;
 typedef struct ba_block_header * ba_b;
 
+/* we assume here that malloc has sizeof(void*) bytes of overhead */
+#define BLOCK_HEADER_SIZE (sizeof(struct ba_page) + sizeof(void*))
+
+
 #ifdef BA_STATS
 struct block_alloc_stats {
     size_t st_max;
@@ -148,18 +152,63 @@ struct block_alloc_stats {
 # define BA_INIT_STATS(block_size, blocks, name)
 #endif
 
-struct block_allocator {
+static INLINE uint32_t round_up32_(uint32_t v) {
+    v |= v >> 1; /* first round down to one less than a power of 2 */
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    return v;
+}
+
+static INLINE uint32_t round_up32(const uint32_t v) {
+    return round_up32_(v)+1;
+}
+/*
+ * every allocator has one of these, which describe the layout of pages
+ * in a way that makes calculations easy
+ */
+
+struct ba_layout {
     size_t offset;
+    uint32_t block_size;
+    uint32_t blocks;
+};
+
+#define BA_INIT_LAYOUT(block_size, blocks) { 0, block_size, blocks }
+
+static INLINE void ba_init_layout(struct ba_layout * l,
+				  const uint32_t block_size,
+				  const uint32_t blocks) {
+    l->block_size = block_size;
+    l->blocks = blocks;
+    l->offset = sizeof(struct ba_page) + (blocks - 1) * block_size;
+}
+
+static INLINE void ba_align_layout(struct ba_layout * l) {
+    /* overrun anyone ? ,) */
+    uint32_t page_size = l->offset + l->block_size + BLOCK_HEADER_SIZE;
+    fprintf(stderr, "page_size: %u\n", page_size);
+    if (page_size & (page_size - 1)) {
+	page_size = round_up32(page_size);
+    }
+    fprintf(stderr, "page_size: %u\n", page_size);
+    page_size -= BLOCK_HEADER_SIZE + sizeof(struct ba_page);
+    fprintf(stderr, "page_size: %u\n", page_size);
+    ba_init_layout(l, l->block_size, page_size/l->block_size);
+}
+
+struct block_allocator {
+    struct ba_layout l;
     ba_b free_blk; /* next free blk in alloc */
     ba_p alloc; /* current page used for allocating */
     ba_p last_free;
-    uint32_t block_size;
-    uint32_t magnitude;
     ba_p first; /* doube linked list of other pages (!free,!full,!alloc) */
     ba_p * pages;
     ba_p empty; /* single linked list of empty pages */
-    uint32_t empty_pages, max_empty_pages;
-    uint32_t blocks;
+    uint32_t magnitude;
+    uint32_t empty_pages;
+    uint32_t max_empty_pages;
     uint32_t allocated;
     uint32_t num_pages;
     char * blueprint;
@@ -167,20 +216,19 @@ struct block_allocator {
     struct block_alloc_stats stats;
 #endif
 };
+
 typedef struct block_allocator block_allocator;
 #define BA_INIT(block_size, blocks, name...) {\
-    0/*offset*/,\
+    BA_INIT_LAYOUT(block_size, blocks),\
     NULL/*free_blk*/,\
     NULL/*alloc*/,\
     NULL/*last_free*/,\
-    block_size/*block_size*/,\
-    0/*magnitude*/,\
     NULL/*first*/,\
     NULL/*pages*/,\
     NULL/*empty*/,\
+    0/*magnitude*/,\
     0/*empty_pages*/,\
     BA_MAX_EMPTY/*max_empty_pages*/,\
-    blocks/*blocks*/,\
     0/*allocated*/,\
     0/*num_pages*/,\
     NULL/*blueprint*/,\
@@ -210,13 +258,13 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size);
 EXPORT void ba_destroy(struct block_allocator * a);
 
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
-#define BA_BLOCKN(a, p, n) ((ba_b)(((char*)(p+1)) + (n)*((a)->block_size)))
+#define BA_BLOCKN(a, p, n) ((ba_b)(((char*)(p+1)) + (n)*((a)->l.block_size)))
 #if defined(BA_DEBUG) || !defined(BA_CRAZY)
-# define BA_CHECK_PTR(a, p, ptr)	((p) && (size_t)((char*)ptr - (char*)(p)) <= (a)->offset)
+# define BA_CHECK_PTR(a, p, ptr)	((p) && (size_t)((char*)ptr - (char*)(p)) <= (a)->l.offset)
 #else
-# define BA_CHECK_PTR(a, p, ptr)	((size_t)((char*)ptr - (char*)(p)) <= (a)->offset)
+# define BA_CHECK_PTR(a, p, ptr)	((size_t)((char*)ptr - (char*)(p)) <= (a)->l.offset)
 #endif
-#define BA_LASTBLOCK(a, p) ((ba_b)((char*)p + (a)->offset))
+#define BA_LASTBLOCK(a, p) ((ba_b)((char*)p + (a)->l.offset))
 
 #ifdef BA_STATS
 # define INC(X) do { (a->stats.X++); } while (0)
@@ -259,7 +307,7 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
     ptr = a->free_blk;
 #ifndef BA_CHAIN_PAGE
     if (ptr->next == BA_ONE) {
-	a->free_blk = (ba_b)(((char*)ptr) + a->block_size);
+	a->free_blk = (ba_b)(((char*)ptr) + a->l.block_size);
 	a->free_blk->next = (ba_b)(size_t)!(a->free_blk == BA_LASTBLOCK(a, a->alloc));
     } else
 #endif
@@ -333,9 +381,6 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     ba_low_free(a, p, (ba_b)ptr);
 }
 
-/* we assume here that malloc has sizeof(void*) bytes of overhead */
-#define BLOCK_HEADER_SIZE (sizeof(struct ba_page) + sizeof(void*))
-
 #define MS(x)	#x
 
 /* goto considered harmful */
@@ -397,10 +442,9 @@ struct ba_relocation {
 }
 
 struct ba_local {
+    struct ba_layout l;
     ba_b free_block;
     ba_p page;
-    uint32_t block_size;
-    uint32_t blocks;
     struct block_allocator * a;
     struct ba_relocation rel;
 };
