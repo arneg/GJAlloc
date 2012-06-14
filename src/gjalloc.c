@@ -723,6 +723,107 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
     }
 }
 
+/*
+ * Here come local allocator definitions
+ */
+EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
+			  uint32_t blocks, uint32_t max_blocks,
+			  void (*simple)(void *, size_t, ptrdiff_t),
+			  void (*relocate)(void*, void*, size_t)) {
+
+    if (block_size < sizeof(struct ba_block_header)) {
+	block_size = sizeof(struct ba_block_header);
+    }
+
+    if (!blocks) blocks = 16;
+    if (!max_blocks) max_blocks = 512;
+
+    if (blocks >= max_blocks) {
+	ba_error("foo");
+    }
+
+    if (!simple) {
+	ba_error("simple relocation mechanism needs to be implemented");
+    }
+
+    ba_init_layout(&a->l, block_size, blocks);
+    a->max_blocks = max_blocks;
+    a->rel.simple = simple;
+    a->rel.relocate = relocate;
+
+    a->free_block = NULL;
+    a->page = (ba_p)NULL;
+}
+
+EXPORT void ba_local_get_page(struct ba_local * a) {
+    if (a->a) {
+	/* old page is full */
+	if (a->page) {
+	    a->page->first = NULL;
+	    a->page->used = a->l.blocks;
+	}
+	/* get page from allocator */
+	a->page = ba_get_page(a->a);
+	a->free_block = a->page->first;
+    } else {
+	if (a->page) {
+	    struct ba_layout l;
+	    ptrdiff_t diff;
+	    ba_p p;
+	    int transform = 0;
+
+	    ba_init_layout(&l, a->l.block_size, a->l.blocks * 2);
+
+	    if (l.blocks > a->max_blocks) {
+		l.blocks = a->max_blocks;
+		ba_align_layout(&l);
+		transform = 1;
+	    }
+
+#ifdef BA_DEBUG
+	    fprintf(stderr, "realloc from %lu to %lu bytes.\n",
+		    BA_PAGESIZE(a->l), BA_PAGESIZE(l));
+#endif
+
+	    p = (ba_p)realloc(a->page, BA_PAGESIZE(l));
+	    diff = (char*)a->page - (char*)p;
+	    if (diff) {
+		a->page = p;
+		a->rel.simple(BA_BLOCKN(l, p, 0), a->l.blocks, diff);
+	    }
+	    a->free_block = BA_BLOCKN(l, p, a->l.blocks);
+	    a->free_block->next = BA_ONE;
+	    a->l = l;
+
+	    if (transform) {
+#ifdef BA_DEBUG
+		fprintf(stderr, "transforming into allocator\n");
+#endif
+		a->a = (struct block_allocator *)
+			malloc(sizeof(struct block_allocator));
+		if (!a->a) ba_error("no_mem");
+		ba_init(a->a, l.block_size, l.blocks);
+		/* transform here! */
+		a->page->next = a->page->prev = NULL;
+		ba_htable_insert(a->a, a->page);
+	    }
+	} else {
+	    ba_init_layout(&a->l, a->l.block_size, a->l.blocks);
+	    a->page = (ba_p)malloc(BA_PAGESIZE(a->l));
+	    if (!a->page) ba_error("no mem");
+	    ba_free_page(&a->l, a->page, NULL);
+	    a->free_block = a->page->first;
+	}
+    }
+}
+
+EXPORT void ba_ldestroy(struct ba_local * a) {
+    ba_destroy(a->a);
+    free(a->a);
+    a->page = NULL;
+    a->free_block = NULL;
+}
+
 #ifdef __cplusplus
 }
 #endif

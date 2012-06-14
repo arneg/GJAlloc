@@ -440,23 +440,69 @@ struct ba_relocation {
  *
  */
 
-#define BA_LINIT(block_size, blocks) {\
+#define BA_LINIT(block_size, blocks, max_blocks) {\
+    BA_INIT_LAYOUT(block_size, blocks),\
     /**/NULL,\
     /**/NULL,\
     /**/0,\
-    /**/0,\
+    /**/max_blocks,\
     /**/NULL,\
+    { NULL, NULL }\
 }
 
 struct ba_local {
     struct ba_layout l;
     ba_b free_block;
     ba_p page;
+    uint32_t max_blocks;
     struct block_allocator * a;
     struct ba_relocation rel;
 };
 
+EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
+			  uint32_t blocks, uint32_t max_blocks,
+			  void (*simple)(void *, size_t, ptrdiff_t),
+			  void (*relocate)(void*, void*, size_t));
 
+EXPORT void ba_local_get_page(struct ba_local * a);
+EXPORT void ba_ldestroy(struct ba_local * a);
+
+static INLINE void * ba_lalloc(struct ba_local * a) {
+    ba_b ptr;
+
+    if (!a->free_block) {
+	ba_local_get_page(a);
+    }
+
+    ptr = a->free_block;
+
+#ifndef BA_CHAIN_PAGE
+    if (ptr->next == BA_ONE) {
+	a->free_block = (ba_b)(((char*)ptr) + a->l.block_size);
+	a->free_block->next = (ba_b)(size_t)!(a->free_block == BA_LASTBLOCK(a->l, a->page));
+    } else
+#endif
+	a->free_block = ptr->next;
+
+    BA_MARK_ALLOCED(ptr);
+
+    return ptr;
+}
+
+static INLINE void ba_lfree(struct ba_local * a, void * ptr) {
+    if (!a->a || BA_CHECK_PTR(a->l, a->page, ptr)) {
+#if BA_DEBUG
+	if (((ba_b)ptr)->magic == BA_MARK_FREE) {
+	    ba_error("double free");
+	}
+#endif
+	BA_MARK_FREED(ptr);
+	((ba_b)ptr)->next = a->free_block;
+	a->free_block = (ba_b)ptr;
+    } else {
+	ba_free(a->a, ptr);
+    }
+}
 
 /*
  * =============================================
