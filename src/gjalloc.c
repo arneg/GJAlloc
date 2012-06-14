@@ -113,7 +113,7 @@ EXPORT void ba_print_stats(struct block_allocator * a) {
 /* #define BA_ALIGNMENT	8 */
 
 #ifndef BA_CMEMSET
-static INLINE void cmemset(char * dst, char * src, size_t s,
+static INLINE void cmemset(char * dst, const char * src, size_t s,
 			   size_t n) {
     memcpy(dst, src, s);
 
@@ -177,26 +177,28 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 #endif
 }
 
-static INLINE void ba_free_page(struct block_allocator * a, ba_p p) {
-    p->first = BA_BLOCKN(a->l, p, 0);
+static INLINE void ba_free_page(const struct ba_layout * l, ba_p p,
+				const void * blueprint) {
+    const char * bp = (char*)blueprint;
+    p->first = BA_BLOCKN(*l, p, 0);
     p->used = 0;
 
-    if (a->blueprint)
-	BA_CMEMSET((char*)(p+1), (char*)a->blueprint, a->l.block_size, a->l.blocks);
+    if (bp)
+	BA_CMEMSET((char*)(p+1), bp, l->block_size, l->blocks);
 
 #ifdef BA_CHAIN_PAGE
     do {
 	char * ptr = (char*)(p+1);
 	
-	while (ptr < BA_LASTBLOCK(a, p)) {
+	while (ptr < BA_LASTBLOCK(*l, p)) {
 #ifdef BA_DEBUG
 	    MEM_RW(((ba_b)ptr)->magic);
 	    ((ba_b)ptr)->magic = BA_MARK_FREE;
 #endif
-	    ((ba_b)ptr)->next = (ba_b)(ptr+a->l.block_size);
-	    ptr+=a->l.block_size;
+	    ((ba_b)ptr)->next = (ba_b)(ptr+l->block_size);
+	    ptr+=l->block_size;
 	}
-	BA_LASTBLOCK(a, p)->next = NULL;
+	BA_LASTBLOCK(*l, p)->next = NULL;
     } while (0);
 #else
     p->first->next = BA_ONE;
@@ -239,7 +241,7 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) 
 	    n--;
 	    if (t->next == BA_ONE) {
 		t = (ba_b)(((char*)t) + a->l.block_size);
-		t->next = (ba_b)(size_t)!(t == BA_LASTBLOCK(a, a->alloc));
+		t->next = (ba_b)(size_t)!(t == BA_LASTBLOCK(a->l, a->alloc));
 	    } else {
 		t = t->next;
 	    }
@@ -320,7 +322,7 @@ static INLINE void ba_htable_grow(struct block_allocator * a) {
 	ba_p * b = a->pages + n;
 
 	while (*b) {
-	    uint32_t h = hash1(a, BA_LASTBLOCK(a, *b)) & BA_HASH_MASK(a);
+	    uint32_t h = hash1(a, BA_LASTBLOCK(a->l, *b)) & BA_HASH_MASK(a);
 	    if (h != n) {
 		ba_p p = *b;
 		*b = p->hchain;
@@ -366,7 +368,7 @@ EXPORT void ba_print_htable(const struct block_allocator * a) {
 	    fprintf(stderr, "empty %u\n", i);
 	}
 	while (p) {
-	    void * ptr = BA_LASTBLOCK(a, p);
+	    void * ptr = BA_LASTBLOCK(a->l, p);
 	    hval = hash1(a, ptr);
 	    fprintf(stderr, "%u\t%X[%u]\t%p-%p\t%X\n", i, hval, hval & BA_HASH_MASK(a), p+1, ptr, (unsigned int)((uintptr_t)ptr >> a->magnitude));
 	    p = p->hchain;
@@ -381,7 +383,7 @@ EXPORT void ba_print_htable(const struct block_allocator * a) {
  */
 static INLINE void ba_htable_insert(const struct block_allocator * a,
 				    ba_p p) {
-    uint32_t hval = hash1(a, BA_LASTBLOCK(a, p));
+    uint32_t hval = hash1(a, BA_LASTBLOCK(a->l, p));
     ba_p * b = a->pages + (hval & BA_HASH_MASK(a));
 
 
@@ -436,7 +438,7 @@ static INLINE void ba_htable_replace(const struct block_allocator * a,
 
 static INLINE void ba_htable_delete(const struct block_allocator * a,
 				    ba_p p) {
-    uint32_t hval = hash1(a, BA_LASTBLOCK(a, p));
+    uint32_t hval = hash1(a, BA_LASTBLOCK(a->l, p));
     ba_p * b = a->pages + (hval & BA_HASH_MASK(a));
 
     while (*b) {
@@ -467,7 +469,7 @@ static INLINE void ba_htable_lookup(struct block_allocator * a,
 LOOKUP:
     p = a->pages[h[c] & BA_HASH_MASK(a)];
     while (p) {
-	if (BA_CHECK_PTR(a, p, ptr)) {
+	if (BA_CHECK_PTR(a->l, p, ptr)) {
 	    a->last_free = p;
 	    return;
 	}
@@ -505,7 +507,7 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 		}
 	    }
 
-	    hval = hash1(a, BA_LASTBLOCK(a, p)) & BA_HASH_MASK(a);
+	    hval = hash1(a, BA_LASTBLOCK(a->l, p)) & BA_HASH_MASK(a);
 
 	    if (hval != n) {
 		fprintf(stderr, "page with hash %u found in bucket %u\n",
@@ -528,7 +530,7 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 }
 #endif
 
-static INLINE void ba_alloc_page(struct block_allocator * a) {
+static INLINE ba_p ba_alloc_page(struct block_allocator * a) {
     ba_p p;
 
     if (unlikely(a->num_pages == a->allocated)) {
@@ -538,20 +540,39 @@ static INLINE void ba_alloc_page(struct block_allocator * a) {
     a->num_pages++;
     p = (ba_p)malloc(BA_PAGESIZE(a->l));
     if (!p) BA_ERROR("no mem. alloc returned zero.");
-    ba_free_page(a, p);
+    ba_free_page(&a->l, p, a->blueprint);
     p->next = p->prev = NULL;
-    a->alloc = p;
     ba_htable_insert(a, p);
 #ifdef BA_DEBUG
     ba_check_allocator(a, "ba_alloc after insert", __FILE__, __LINE__);
 #endif
 #ifdef BA_DEBUG
-    MEM_RW(BA_LASTBLOCK(a, p)->magic);
-    BA_LASTBLOCK(a, p)->magic = BA_MARK_FREE;
+    MEM_RW(BA_LASTBLOCK(a->l, p)->magic);
+    BA_LASTBLOCK(a->l, p)->magic = BA_MARK_FREE;
     MEM_RW(BA_BLOCKN(a->l, p, 0)->magic);
     BA_BLOCKN(a->l, p, 0)->magic = BA_MARK_ALLOC;
     ba_check_allocator(a, "ba_alloc after insert.", __FILE__, __LINE__);
 #endif
+
+    return p;
+}
+
+static INLINE ba_p ba_get_page(struct block_allocator * a) {
+    ba_p p;
+
+    if (a->first) {
+	p = a->first;
+	DOUBLE_SHIFT(a->first);
+    } else if (a->empty) {
+	p = a->empty;
+	SINGLE_SHIFT(a->empty);
+	a->empty_pages--;
+    } else {
+	p = ba_alloc_page(a);
+    }
+    p->next = NULL;
+
+    return p;
 }
 
 EXPORT void ba_low_alloc(struct block_allocator * a) {
@@ -564,19 +585,7 @@ EXPORT void ba_low_alloc(struct block_allocator * a) {
 	a->alloc->used = a->l.blocks;
     }
 
-    if (a->first) {
-	a->alloc = a->first;
-	DOUBLE_SHIFT(a->first);
-    } else if (a->empty) {
-	a->alloc = a->empty;
-	SINGLE_SHIFT(a->empty);
-	a->empty_pages--;
-    } else {
-	a->alloc = NULL;
-	ba_alloc_page(a);
-    }
-    a->alloc->next = NULL;
-
+    a->alloc = ba_get_page(a);
     a->free_blk = a->alloc->first;
 
 #ifdef BA_DEBUG
@@ -617,7 +626,7 @@ EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
 static INLINE void ba_htable_linear_lookup(struct block_allocator * a,
 				    const void * ptr) {
     PAGE_LOOP(a, {
-	if (BA_CHECK_PTR(a, p, ptr)) {
+	if (BA_CHECK_PTR(a->l, p, ptr)) {
 	    a->last_free = p;
 	    return;
 	}
@@ -684,8 +693,8 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
     ba_show_pages(a);
     ba_print_htable(a);
     fprintf(stderr, "removing page %4u[%p]\t(%p .. %p) -> %X (%X) (of %u).\n", 
-	    n, p, p+1, BA_LASTBLOCK(a, p), hash1(a, BA_LASTBLOCK(a,p)),
-	    hash1(a, BA_LASTBLOCK(a,p)) & BA_HASH_MASK(a),
+	    n, p, p+1, BA_LASTBLOCK(a->l, p), hash1(a, BA_LASTBLOCK(a->l,p)),
+	    hash1(a, BA_LASTBLOCK(a->l,p)) & BA_HASH_MASK(a),
 	    a->num_pages);
 #endif
 

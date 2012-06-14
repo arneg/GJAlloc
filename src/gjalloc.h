@@ -257,11 +257,11 @@ EXPORT void ba_destroy(struct block_allocator * a);
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
 #define BA_BLOCKN(l, p, n) ((ba_b)(((char*)(p+1)) + (n)*((l).block_size)))
 #if defined(BA_DEBUG) || !defined(BA_CRAZY)
-# define BA_CHECK_PTR(a, p, ptr)	((p) && (size_t)((char*)ptr - (char*)(p)) <= (a)->l.offset)
+# define BA_CHECK_PTR(l, p, ptr)	((p) && (size_t)((char*)ptr - (char*)(p)) <= (l).offset)
 #else
-# define BA_CHECK_PTR(a, p, ptr)	((size_t)((char*)ptr - (char*)(p)) <= (a)->l.offset)
+# define BA_CHECK_PTR(l, p, ptr)	((size_t)((char*)ptr - (char*)(p)) <= (l).offset)
 #endif
-#define BA_LASTBLOCK(a, p) ((ba_b)((char*)p + (a)->l.offset))
+#define BA_LASTBLOCK(l, p) ((ba_b)((char*)(p) + (l).offset))
 
 #ifdef BA_STATS
 # define INC(X) do { (a->stats.X++); } while (0)
@@ -288,6 +288,18 @@ static ATTRIBUTE((constructor)) void _________() {
 # define PRINT(fmt, args...)     emit(snprintf(_ba_buf, sizeof(_ba_buf), fmt, args))
 #endif
 
+#ifdef BA_DEBUG
+# define BA_MARK_FREED(ptr)  do {		    \
+    ((ba_b)ptr)->magic = BA_MARK_FREE;		    \
+} while(0)
+# define BA_MARK_ALLOCED(ptr)  do {		    \
+    ((ba_b)ptr)->magic = BA_MARK_ALLOC;		    \
+} while(0)
+#else
+# define BA_MARK_FREED(ptr)
+# define BA_MARK_ALLOCED(ptr)
+#endif
+
 ATTRIBUTE((always_inline,malloc))
 static INLINE void * ba_alloc(struct block_allocator * a) {
     ba_b ptr;
@@ -305,13 +317,12 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 #ifndef BA_CHAIN_PAGE
     if (ptr->next == BA_ONE) {
 	a->free_blk = (ba_b)(((char*)ptr) + a->l.block_size);
-	a->free_blk->next = (ba_b)(size_t)!(a->free_blk == BA_LASTBLOCK(a, a->alloc));
+	a->free_blk->next = (ba_b)(size_t)!(a->free_blk == BA_LASTBLOCK(a->l, a->alloc));
     } else
 #endif
 	a->free_blk = ptr->next;
-#ifdef BA_DEBUG
-    ((ba_b)ptr)->magic = BA_MARK_ALLOC;
-#endif
+
+    BA_MARK_ALLOCED(ptr);
 #ifdef BA_MEMTRACE
     PRINT("%% %p 0x%x\n", ptr, a->block_size);
 #endif
@@ -346,14 +357,13 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     if (((ba_b)ptr)->magic == BA_MARK_FREE) {
 	BA_ERROR("double freed somethign\n");
     }
-    /*memset(ptr, 0x75, a->block_size);*/
-    ((ba_b)ptr)->magic = BA_MARK_FREE;
 #endif
+    BA_MARK_FREED(ptr);
 
 #ifdef BA_STATS
     a->stats.st_used--;
 #endif
-    if (likely(BA_CHECK_PTR(a, a->alloc, ptr))) {
+    if (likely(BA_CHECK_PTR(a->l, a->alloc, ptr))) {
 	INC(free_fast1);
 	((ba_b)ptr)->next = a->free_blk;
 	a->free_blk = (ba_b)ptr;
@@ -361,7 +371,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     }
 
 
-    if (BA_CHECK_PTR(a, a->last_free, ptr)) {
+    if (BA_CHECK_PTR(a->l, a->last_free, ptr)) {
 	p = a->last_free;
 	INC(free_fast2);
     } else {
