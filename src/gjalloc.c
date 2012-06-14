@@ -826,6 +826,7 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
     }
 #endif
 
+    a->empty_pages--;
     a->num_pages--;
     free(p);
 
