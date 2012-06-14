@@ -255,7 +255,7 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size);
 EXPORT void ba_destroy(struct block_allocator * a);
 
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
-#define BA_BLOCKN(a, p, n) ((ba_b)(((char*)(p+1)) + (n)*((a)->l.block_size)))
+#define BA_BLOCKN(l, p, n) ((ba_b)(((char*)(p+1)) + (n)*((l).block_size)))
 #if defined(BA_DEBUG) || !defined(BA_CRAZY)
 # define BA_CHECK_PTR(a, p, ptr)	((p) && (size_t)((char*)ptr - (char*)(p)) <= (a)->l.offset)
 #else

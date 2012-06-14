@@ -178,7 +178,7 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 }
 
 static INLINE void ba_free_page(struct block_allocator * a, ba_p p) {
-    p->first = BA_BLOCKN(a, p, 0);
+    p->first = BA_BLOCKN(a->l, p, 0);
     p->used = 0;
 
     if (a->blueprint)
@@ -548,8 +548,8 @@ static INLINE void ba_alloc_page(struct block_allocator * a) {
 #ifdef BA_DEBUG
     MEM_RW(BA_LASTBLOCK(a, p)->magic);
     BA_LASTBLOCK(a, p)->magic = BA_MARK_FREE;
-    MEM_RW(BA_BLOCKN(a, p, 0)->magic);
-    BA_BLOCKN(a, p, 0)->magic = BA_MARK_ALLOC;
+    MEM_RW(BA_BLOCKN(a->l, p, 0)->magic);
+    BA_BLOCKN(a->l, p, 0)->magic = BA_MARK_ALLOC;
     ba_check_allocator(a, "ba_alloc after insert.", __FILE__, __LINE__);
 #endif
 }
@@ -599,7 +599,7 @@ EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
 	/* reset the internal list. this avoids fragmentation which would otherwise
 	 * happen when reusing pages. Since that is cheap here, we do it.
 	 */
-	p->first = BA_BLOCKN(a, p, 0);
+	p->first = BA_BLOCKN(a->l, p, 0);
 	p->first->next = BA_ONE;
 #endif
 	SINGLE_LINK(a->empty, p);
