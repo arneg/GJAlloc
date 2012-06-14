@@ -24,8 +24,7 @@ static INLINE void ba_htable_grow(struct block_allocator * a);
 #define BA_NBLOCK(a, p, ptr)	((uintptr_t)((char*)ptr - (char)(p+1))/(a)->l.block_size)
 
 #define BA_DIVIDE(a, b)	    ((a) / (b) + (!!((a) & ((b)-1))))
-#define BA_PAGESIZE(a)	    (sizeof(struct ba_page)			\
-			     + (a)->l.offset + (a)->l.block_size) 
+#define BA_PAGESIZE(l)	    ((l).offset + (l).block_size)
 #define BA_HASH_MASK(a)  (((a->allocated)) - 1)
 
 #define BA_BYTES(a)	( (sizeof(ba_p) * ((a)->allocated) ) )
@@ -158,7 +157,7 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 #ifndef ctz32
 # define ctz32 __builtin_ctz
 #endif
-    a->magnitude = ctz32(round_up32(BA_PAGESIZE(a))); 
+    a->magnitude = ctz32(round_up32(BA_PAGESIZE(a->l)));
     a->num_pages = 0;
     a->empty_pages = 0;
     a->max_empty_pages = BA_MAX_EMPTY;
@@ -171,9 +170,9 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 
 #ifdef BA_DEBUG
     fprintf(stderr, " -> blocks: %u block_size: %u page_size: %u mallocing size: %lu, next pages: %u magnitude: %u\n",
-	    a->l.blocks, block_size, BA_PAGESIZE(a)-sizeof(struct ba_page),
-	    BA_PAGESIZE(a),
-	    round_up32(BA_PAGESIZE(a)),
+	    a->l.blocks, block_size, BA_PAGESIZE(a->l)-sizeof(struct ba_page),
+	    BA_PAGESIZE(a->l),
+	    round_up32(BA_PAGESIZE(a->l)),
 	    a->magnitude);
 #endif
 }
@@ -208,7 +207,7 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
     if (!a->allocated) return;
 
     PAGE_LOOP(a, {
-	MEM_RW_RANGE(p, BA_PAGESIZE(a));
+	MEM_RW_RANGE(p, BA_PAGESIZE(a->l));
 	free(p);
     });
 
@@ -226,8 +225,8 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) 
     ba_b t;
     size_t n = 0;
 
-    /* fprintf(stderr, "page_size: %u, pages: %u\n", BA_PAGESIZE(a), a->num_pages); */
-    *size = BA_BYTES(a) + a->num_pages * BA_PAGESIZE(a);
+    /* fprintf(stderr, "page_size: %u, pages: %u\n", BA_PAGESIZE(a->l), a->num_pages); */
+    *size = BA_BYTES(a) + a->num_pages * BA_PAGESIZE(a->l);
     PAGE_LOOP(a, {
 	if (p == a->alloc) continue;
 	n += p->used;
@@ -252,7 +251,7 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) 
 
 EXPORT void ba_destroy(struct block_allocator * a) {
     PAGE_LOOP(a, {
-	MEM_RW_RANGE(p, BA_PAGESIZE(a));
+	MEM_RW_RANGE(p, BA_PAGESIZE(a->l));
 	free(p);
     });
 
@@ -537,7 +536,7 @@ static INLINE void ba_alloc_page(struct block_allocator * a) {
     }
 
     a->num_pages++;
-    p = (ba_p)malloc(BA_PAGESIZE(a));
+    p = (ba_p)malloc(BA_PAGESIZE(a->l));
     if (!p) BA_ERROR("no mem. alloc returned zero.");
     ba_free_page(a, p);
     p->next = p->prev = NULL;
@@ -691,7 +690,7 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 #endif
 
     ba_htable_delete(a, p);
-    MEM_RW_RANGE(*p, BA_PAGESIZE(a));
+    MEM_RW_RANGE(*p, BA_PAGESIZE(a->l));
 
     /* we know that p == a->last_free */
     a->last_free = NULL;
