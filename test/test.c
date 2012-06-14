@@ -112,7 +112,7 @@ int main(int argc, char ** argv) {
 	shuffle(map, i);
 #endif
 	n = run2(i, map);
-	printf("%ld\t%.1f\t%lu\t%u\n", i, (double)mdiff/(n), bytes, num_pages);
+	printf("%ld\t%.1f\t%lu\t%u\n", i, (double)mdiff/(n), (long unsigned)bytes, num_pages);
     }
 
     TEST_DEINIT(foo);
