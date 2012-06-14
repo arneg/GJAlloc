@@ -6,16 +6,9 @@
   block size is `sizeof(void*)` and allocators initialized with a block size
   smaller than that will use blocks of size `sizeof(void*)` implicitly.
 
-  GJAlloc comes in two different internal algorithms. One uses aligned pages
-  to minimize the cost of deallocations. It can be activated by defining
-  `BA_USE_MEMALIGN`. It is optimized for speed and can crash when passing a
-  bad pointer to `ba_free()`. It also does not make any effort to detect other
-  misuse, like double frees.
-  The second algorithm uses unaligned pages and a hash table to locate pages.
-  It offers some fault detection. Performance may vary between the two,
-  depending on architecture and application. A performance comparison of the
-  second algorithm with a couple of widely used fixed size block allocator
-  libraries can be found in the
+  GJAlloc uses a hashtable to locate the page a block belongs to when `ba_free`
+  is called. It offers some fault detection. A performance comparison with a couple
+  of widely used fixed size block allocator libraries can be found in the
   [wiki](https://github.com/arneg/GJAlloc/wiki/Performance-comparison). Good
   luck!
 
