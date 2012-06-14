@@ -5,6 +5,7 @@ extern "C" {
 #define BLOCK_ALLOCATOR_H
 
 #include <stdint.h>
+#include <stddef.h>
 #ifdef BA_MEMTRACE
  #include <stdio.h>
 #endif
@@ -353,6 +354,63 @@ label:								\
 } while(0)
 #define LOW_PAGE_LOOP(a, l, C...)	LOW_PAGE_LOOP2(a, l, C)
 #define PAGE_LOOP(a, C...)	LOW_PAGE_LOOP(a, XCONCAT(page_loop_label, __LINE__), C)
+
+/* 
+ * =============================================
+ * Here comes definitions for relocation strategies
+ */
+
+/*
+ * void relocate_simple(void * data, size_t n, ptrdiff_t offset);
+ *
+ * n blocks at data have been relocated. all internal pointers have to be
+ * updated by adding offset.
+ * this is used after realloc had to malloc new space.
+ */
+
+/*
+ * void relocate_default(void * src, void * dst, size_t n)
+ *
+ * relocate n blocks from src to dst. dst is uninitialized.
+ */
+
+struct ba_relocation {
+    void (*simple)(void *, size_t, ptrdiff_t);
+    void (*relocate)(void*, void*, size_t);
+};
+
+/*
+ * =============================================
+ * Here comes definitions for local allocators.
+ */
+
+/* initialized as
+ *
+ */
+
+#define BA_LINIT(block_size, blocks) {\
+    /**/NULL,\
+    /**/NULL,\
+    /**/0,\
+    /**/0,\
+    /**/NULL,\
+}
+
+struct ba_local {
+    ba_b free_block;
+    ba_p page;
+    uint32_t block_size;
+    uint32_t blocks;
+    struct block_allocator * a;
+    struct ba_relocation rel;
+};
+
+
+
+/*
+ * =============================================
+ * Here comes definitions for shared allocators.
+ */
 
 #endif /* BLOCK_ALLOCATOR_H */
 #ifdef __cplusplus
