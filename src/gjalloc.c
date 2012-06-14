@@ -818,10 +818,24 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 }
 
 EXPORT void ba_ldestroy(struct ba_local * a) {
-    ba_destroy(a->a);
-    free(a->a);
+    if (a->a) {
+	ba_destroy(a->a);
+	free(a->a);
+	a->a = NULL;
+    } else {
+	free(a->page);
+    }
     a->page = NULL;
     a->free_block = NULL;
+}
+
+EXPORT void ba_lfree_all(struct ba_local * a) {
+    if (a->a) {
+	ba_free_all(a->a);
+    } else {
+	ba_free_page(&a->l, a->page, NULL);
+	a->free_block = a->page->first;
+    }
 }
 
 #ifdef __cplusplus

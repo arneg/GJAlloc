@@ -466,6 +466,7 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 
 EXPORT void ba_local_get_page(struct ba_local * a);
 EXPORT void ba_ldestroy(struct ba_local * a);
+EXPORT void ba_lfree_all(struct ba_local * a);
 
 static INLINE void * ba_lalloc(struct ba_local * a) {
     ba_b ptr;
