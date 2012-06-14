@@ -9,7 +9,7 @@ NUM=3
 CC=gcc -O3 -msse $(X) $(LD_FLAGS)
 CXX=g++ -O3 -msse $(X) $(LD_FLAGS)
 
-all: c/test_gj c/test_system cpp/test_gj cpp/test_fsb cpp/test_boost cpp/test_std cpp/list_gj cpp/list_boost cpp/list_std cpp/list_fsb
+all: c/test_gj c/test_gjlocal c/test_system cpp/test_gj cpp/test_fsb cpp/test_boost cpp/test_std cpp/list_gj cpp/list_boost cpp/list_std cpp/list_fsb
 	@echo ""
 ifndef X
 	@echo ""
@@ -68,6 +68,9 @@ cpp/test_rt: cpp/test_rt.cpp
 	$(CXX) -Irtalloc rtalloc/rtAllocator.cpp $< -o $@
 
 c/test_gj: c/test_gj.c
+	$(CC) -I../src ../src/gjalloc.c $< -o $@
+
+c/test_gjlocal: c/test_gjlocal.c
 	$(CC) -I../src ../src/gjalloc.c $< -o $@
 
 c/test_cha: c/test_cha.c
