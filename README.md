@@ -16,7 +16,7 @@
   double frees and many cases of bad memory access in blocks that have been
   freed.
 
-  GJAlloc was initially developed for use in [pike](http://pike.ida.liu.se).
+  GJAlloc was initially developed for use in [pike](http://pike.lysator.liu.se).
 
 ## Installation
 
