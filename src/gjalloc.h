@@ -300,7 +300,7 @@ static ATTRIBUTE((constructor)) void _________() {
 # define BA_MARK_ALLOCED(ptr)
 #endif
 
-ATTRIBUTE((always_inline,malloc))
+ATTRIBUTE((malloc))
 static INLINE void * ba_alloc(struct block_allocator * a) {
     ba_b ptr;
 #ifdef BA_STATS
@@ -468,6 +468,7 @@ EXPORT void ba_local_get_page(struct ba_local * a);
 EXPORT void ba_ldestroy(struct ba_local * a);
 EXPORT void ba_lfree_all(struct ba_local * a);
 
+ATTRIBUTE((malloc))
 static INLINE void * ba_lalloc(struct ba_local * a) {
     ba_b ptr;
 
