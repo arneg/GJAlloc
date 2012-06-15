@@ -72,7 +72,7 @@
   allocate one chunk at a time only (for use in `std::list`, `std::set`
   and `std::map`).
 
-    #include "block_allocator.hh"
+    #include "gjalloc.hh"
 
   Then you are doomed. So many options.
   The simple usage:
