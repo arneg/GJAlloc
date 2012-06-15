@@ -35,15 +35,15 @@
 
 ## Usage in C
 
-    #include "block_allocator.h"
+    #include "gjalloc.h"
 
-    block_allocator allocator = BA_INIT(block_size, blocks);
+    struct block_allocator allocator = BA_INIT(block_size, blocks);
 
   A block allocator struct can be initialized using the `BA_INIT()` macro.
   Alternatively, `ba_init()` can be used.
 
-    block_allocator allocator;
-    void ba_init(block_allocator * allocator, uint32_t block_size, uint32_t blocks)
+    struct block_allocator allocator;
+    void ba_init(struct block_allocator * allocator, uint32_t block_size, uint32_t blocks)
 
   The parameter `block_size` is the size of the individual blocks returned
   from the allocator on calls to `ba_alloc()`. `blocks` can be used to set
@@ -51,8 +51,8 @@
   in both cases merely a hint. `ba_init` tries to adjust the pages as to fit
   into integer multiples of the memory page size. 
 
-    void * ba_alloc(block_allocator * allocator)
-    void ba_free(block_allocator * allocator, void * ptr)
+    void * ba_alloc(struct block_allocator * allocator)
+    void ba_free(struct block_allocator * allocator, void * ptr)
 
   Use these functions to request blocks from or release blocks to the
   allocator.
@@ -62,7 +62,7 @@
   Frees all blocks (and pages) allocated in `allocator`. `ba_alloc()` can
   still be used to allocate new blocks.
 
-    void ba_destroy(block_allocator * allocator)
+    void ba_destroy(struct block_allocator * allocator)
 
   Same as `ba_free_all()` but also frees all internally used memory.
 
