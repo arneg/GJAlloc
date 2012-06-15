@@ -125,6 +125,26 @@ static INLINE void cmemset(char * dst, const char * src, size_t s,
 #define BA_CMEMSET(dst, src, s, n)	cmemset(dst, src, s, n)
 #endif
 
+#ifndef BA_XALLOC
+ATTRIBUTE((malloc))
+static INLINE void * ba_xalloc(const size_t size) {
+    void * p = malloc(size);
+    if (!p) ba_error("no mem");
+    return p;
+}
+#define BA_XALLOC(size)	ba_xalloc(size)
+#endif
+
+#ifndef BA_XREALLOC
+ATTRIBUTE((malloc))
+static INLINE void * ba_xrealloc(void * p, const size_t size) {
+    p = realloc(p, size);
+    if (!p) ba_error("no mem");
+    return p;
+}
+#define BA_XREALLOC(ptr, size)	ba_xrealloc(ptr, size)
+#endif
+
 EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 		    uint32_t blocks) {
     uint32_t page_size;
@@ -164,8 +184,7 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 
     /* we start with management structures for BA_ALLOC_INITIAL pages */
     a->allocated = BA_ALLOC_INITIAL;
-    a->pages = (ba_p*)malloc(BA_ALLOC_INITIAL * sizeof(ba_p));
-    if (!a->pages) ba_error("nomem");
+    a->pages = (ba_p*)BA_XALLOC(BA_ALLOC_INITIAL * sizeof(ba_p));
     memset(a->pages, 0, BA_ALLOC_INITIAL * sizeof(ba_p));
 
 #ifdef BA_DEBUG
@@ -315,8 +334,7 @@ static INLINE void ba_htable_grow(struct block_allocator * a) {
     uint32_t n, old;
     old = a->allocated;
     a->allocated *= 2;
-    a->pages = (ba_p*)realloc(a->pages, a->allocated * sizeof(ba_p));
-    if (!a->pages) ba_error("nomem");
+    a->pages = (ba_p*)BA_XREALLOC(a->pages, a->allocated * sizeof(ba_p));
     memset(a->pages+old, 0, old * sizeof(ba_p));
     for (n = 0; n < old; n++) {
 	ba_p * b = a->pages + n;
@@ -353,8 +371,7 @@ static INLINE void ba_htable_shrink(struct block_allocator * a) {
 	}
     }
 
-    a->pages = (ba_p*)realloc(a->pages, a->allocated * sizeof(ba_p));
-    if (!a->pages) ba_error("nomem");
+    a->pages = (ba_p*)BA_XREALLOC(a->pages, a->allocated * sizeof(ba_p));
 }
 
 #ifdef BA_DEBUG
@@ -538,8 +555,7 @@ static INLINE ba_p ba_alloc_page(struct block_allocator * a) {
     }
 
     a->num_pages++;
-    p = (ba_p)malloc(BA_PAGESIZE(a->l));
-    if (!p) BA_ERROR("no mem. alloc returned zero.");
+    p = (ba_p)BA_XALLOC(BA_PAGESIZE(a->l));
     ba_free_page(&a->l, p, a->blueprint);
     p->next = p->prev = NULL;
     ba_htable_insert(a, p);
@@ -785,7 +801,7 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 		    BA_PAGESIZE(a->l), BA_PAGESIZE(l));
 #endif
 
-	    p = (ba_p)realloc(a->page, BA_PAGESIZE(l));
+	    p = (ba_p)BA_XREALLOC(a->page, BA_PAGESIZE(l));
 	    diff = (char*)a->page - (char*)p;
 	    if (diff) {
 		a->page = p;
@@ -800,8 +816,7 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 		fprintf(stderr, "transforming into allocator\n");
 #endif
 		a->a = (struct block_allocator *)
-			malloc(sizeof(struct block_allocator));
-		if (!a->a) ba_error("no_mem");
+			BA_XALLOC(sizeof(struct block_allocator));
 		ba_init(a->a, l.block_size, l.blocks);
 		/* transform here! */
 		a->page->next = a->page->prev = NULL;
@@ -809,8 +824,7 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 	    }
 	} else {
 	    ba_init_layout(&a->l, a->l.block_size, a->l.blocks);
-	    a->page = (ba_p)malloc(BA_PAGESIZE(a->l));
-	    if (!a->page) ba_error("no mem");
+	    a->page = (ba_p)BA_XALLOC(BA_PAGESIZE(a->l));
 	    ba_free_page(&a->l, a->page, NULL);
 	    a->free_block = a->page->first;
 	}
