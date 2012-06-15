@@ -766,12 +766,12 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
     }
 
     ba_init_layout(&a->l, block_size, blocks);
-    a->max_blocks = max_blocks;
-    a->rel.simple = simple;
-    a->rel.relocate = relocate;
-
     a->free_block = NULL;
     a->page = (ba_p)NULL;
+    a->max_blocks = max_blocks;
+    a->a = NULL;
+    a->rel.simple = simple;
+    a->rel.relocate = relocate;
 }
 
 EXPORT void ba_local_get_page(struct ba_local * a) {
