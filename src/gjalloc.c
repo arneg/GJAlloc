@@ -399,7 +399,7 @@ EXPORT void ba_print_htable(const struct block_allocator * a) {
 
 /*
  * insert the pointer to an allocated page into the
- * hashtable. uses linear probing and open allocation.
+ * hashtable.
  */
 static INLINE void ba_htable_insert(const struct block_allocator * a,
 				    ba_p p) {
