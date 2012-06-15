@@ -1,6 +1,6 @@
 #include "gjalloc.h"
-void simple_reloc(void * ptr, size_t n, ptrdiff_t diff) { 
-    fprintf(stderr, "relocating %lu blocks\n", (unsigned long)n);
+void simple_reloc(void * ptr, void * stop, ptrdiff_t diff) {
+    fprintf(stderr, "relocating from %p to %p\n", ptr, stop);
 }
 #define TEST_INIT(t)	static struct ba_local allocator;
 #define DYNAMIC_INIT(t)	do { ba_init_local(&allocator, sizeof(struct foo), 32,\

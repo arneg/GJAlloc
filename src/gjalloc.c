@@ -744,7 +744,7 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
  */
 EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 			  uint32_t blocks, uint32_t max_blocks,
-			  void (*simple)(void *, size_t, ptrdiff_t),
+			  void (*simple)(void *, void*, ptrdiff_t),
 			  void (*relocate)(void*, void*, size_t)) {
 
     if (block_size < sizeof(struct ba_block_header)) {
@@ -783,6 +783,7 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 	a->free_block = a->page->first;
     } else {
 	if (a->page) {
+	    struct ba_block_header * stop;
 	    struct ba_layout l;
 	    ptrdiff_t diff;
 	    ba_p p;
@@ -802,12 +803,14 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 #endif
 
 	    p = (ba_p)BA_XREALLOC(a->page, BA_PAGESIZE(l));
+	    stop = (struct ba_block_header *)
+		    ((char*)BA_LASTBLOCK(a->l, p) + l.block_size);
 	    diff = (char*)a->page - (char*)p;
 	    if (diff) {
 		a->page = p;
-		a->rel.simple(BA_BLOCKN(l, p, 0), a->l.blocks, diff);
+		a->rel.simple(BA_BLOCKN(l, p, 0), stop, diff);
 	    }
-	    a->free_block = BA_BLOCKN(l, p, a->l.blocks);
+	    a->free_block = stop;
 	    a->free_block->next = BA_ONE;
 	    a->l = l;
 
