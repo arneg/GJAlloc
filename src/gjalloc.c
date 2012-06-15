@@ -186,6 +186,10 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
     a->allocated = BA_ALLOC_INITIAL;
     a->pages = (ba_p*)BA_XALLOC(BA_ALLOC_INITIAL * sizeof(ba_p));
     memset(a->pages, 0, BA_ALLOC_INITIAL * sizeof(ba_p));
+    a->blueprint = NULL;
+#ifdef BA_STATS
+    memset(&a->stats, 0, sizeof(struct ba_stats));
+#endif
 
 #ifdef BA_DEBUG
     fprintf(stderr, " -> blocks: %u block_size: %u page_size: %u mallocing size: %lu, next pages: %u magnitude: %u\n",
