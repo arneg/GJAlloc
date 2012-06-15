@@ -9,7 +9,7 @@ NUM=3
 CC=gcc -O3 -msse $(X) $(LD_FLAGS)
 CXX=g++ -O3 -msse $(X) $(LD_FLAGS)
 
-all: c/test_gj c/test_gjlocal c/test_system cpp/test_gj cpp/test_fsb cpp/test_boost cpp/test_std cpp/list_gj cpp/list_boost cpp/list_std cpp/list_fsb
+all: c/test_gj c/test_gjlocal c/test_system cpp/test_gj cpp/test_fsb cpp/test_boost cpp/test_std c/test_cha cpp/test_rt
 	@echo ""
 ifndef X
 	@echo ""
@@ -59,13 +59,13 @@ cpp/test_%: cpp/test_%.cpp
 	$(CXX) $< -o $@
 
 cpp/test_fsb: cpp/test_fsb.cpp
-	$(CXX) -IFSBAlloc $< -o $@
+	(test -d FSBAlloc && $(CXX) -IFSBAlloc $< -o $@) || echo "FSBAlloc missing"
 
 cpp/test_gj: cpp/test_gj.cpp
 	$(CXX) -I../src ../src/gjalloc.c $< -o $@
 
 cpp/test_rt: cpp/test_rt.cpp
-	$(CXX) -Irtalloc rtalloc/rtAllocator.cpp $< -o $@
+	(test -d rtalloc && $(CXX) -Irtalloc rtalloc/rtAllocator.cpp $< -o $@) || echo "rtalloc missing"
 
 c/test_gj: c/test_gj.c
 	$(CC) -I../src ../src/gjalloc.c $< -o $@
@@ -74,9 +74,9 @@ c/test_gjlocal: c/test_gjlocal.c
 	$(CC) -I../src ../src/gjalloc.c $< -o $@
 
 c/test_cha: c/test_cha.c
-	$(CC) -Ichalloc challoc/challoc.c $< -o $@
+	(test -d challoc && $(CC) -Ichalloc challoc/challoc.c $< -o $@) || echo "challoc missing"
 
-cpp/list_%:	 test_%.hh test.cpp cpp
+cpp/list_%: test_%.hh test.cpp cpp
 	cat $< > a.in.c
 	echo "#line 1 \"list.cpp\"" >> a.in.c
 	cat list.cpp >> a.in.c
