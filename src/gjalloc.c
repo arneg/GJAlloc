@@ -147,7 +147,6 @@ static INLINE void * ba_xrealloc(void * p, const size_t size) {
 
 EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 		    uint32_t blocks) {
-    uint32_t page_size;
 
     if (!block_size) BA_ERROR("ba_init called with zero block_size\n");
 

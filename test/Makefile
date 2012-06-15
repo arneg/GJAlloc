@@ -6,8 +6,8 @@ GCC=gcc -O3 -msse -msse2 -mssse3 -msse4.1 -msse4.2 -I../src
 GCC=gcc -O3 -I../src
 NUM=3
 
-CC=gcc -O3 -msse $(X) $(LD_FLAGS)
-CXX=g++ -O3 -msse $(X) $(LD_FLAGS)
+CC=gcc -Wall -O3 -msse $(X) $(LD_FLAGS)
+CXX=g++ -Wall -O3 -msse $(X) $(LD_FLAGS)
 
 all: c/test_gj c/test_gjlocal c/test_system cpp/test_gj cpp/test_fsb cpp/test_boost cpp/test_std c/test_cha cpp/test_rt
 	@echo ""

@@ -402,7 +402,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	}							\
     }								\
 label:								\
-    0;								\
+    __n = 0;							\
 } while(0)
 #define LOW_PAGE_LOOP(a, l, C...)	LOW_PAGE_LOOP2(a, l, C)
 #define PAGE_LOOP(a, C...)	LOW_PAGE_LOOP(a, XCONCAT(page_loop_label, __LINE__), C)
