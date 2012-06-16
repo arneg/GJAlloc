@@ -515,7 +515,6 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 
     for (n = 0; n < a->allocated; n++) {
 	uint32_t hval;
-	int found = 0;
 	p = a->pages[n];
 
 	while (p) {
@@ -794,13 +793,14 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 	    ba_p p;
 	    int transform = 0;
 
-	    ba_init_layout(&l, a->l.block_size, a->l.blocks * 2);
+	    l.block_size = a->l.block_size;
+	    l.blocks = a->l.blocks * 2;
 
-	    if (l.blocks > a->max_blocks) {
-		l.blocks = a->max_blocks;
+	    if (l.blocks >= a->max_blocks) {
+		ba_init_layout(&l, l.block_size, a->max_blocks);
 		ba_align_layout(&l);
 		transform = 1;
-	    }
+	    } else ba_init_layout(&l, l.block_size, l.blocks);
 
 #ifdef BA_DEBUG
 	    fprintf(stderr, "realloc from %lu to %lu bytes.\n",
