@@ -108,6 +108,89 @@ extern char errbuf[];
 # define BA_ERROR(x...)	do { ba_error(x); } while(0)
 #endif
 
+#if SIZEOF_LONG == 8 || SIZEOF_LONG_LONG == 8
+#define BV_WIDTH    8
+#define BV_MAGNITUDE    3
+#define BV_LENGTH   64
+#define BV_ONE	    ((uint64_t)1)
+#define BV_NIL	    ((uint64_t)0)
+#if SIZEOF_LONG == 8
+#define BV_CLZ	    __builtin_clzl
+#define BV_CTZ	    __builtin_ctzl
+#else
+#define BV_CLZ	    __builtin_clzll
+#define BV_CTZ	    __builtin_ctzll
+#endif
+typedef uint64_t bv_int_t;
+#else
+#define BV_WIDTH    4
+#define BV_MAGNITUDE    2
+#define BV_LENGTH   32
+#define BV_ONE	    ((uint32_t)1)
+#define BV_NIL	    ((uint32_t)0)
+#define BV_CLZ	    __builtin_clz
+#define BV_CTZ	    __builtin_ctz
+typedef uint32_t bv_int_t;
+#endif
+
+struct bitvector {
+    size_t length;
+    bv_int_t * v;
+};
+static INLINE void bv_set_vector(struct bitvector * bv, void * p) {
+    bv->v = (bv_int_t*)p;
+}
+
+static INLINE size_t bv_byte_length(struct bitvector * bv) {
+    size_t bytes = (bv->length >> 3) + !!(bv->length & 7);
+    if (bytes & (BV_LENGTH-1)) {
+	bytes += (BV_LENGTH - (bytes & (BV_LENGTH-1)));
+    }
+    return bytes;
+}
+
+static INLINE void bv_set(struct bitvector * bv, size_t n, int value) {
+    const size_t bit = n&(BV_LENGTH-1);
+    const size_t c = n >> BV_MAGNITUDE;
+    bv_int_t * _v = bv->v + c;
+    if (value) *_v |= BV_ONE << bit;
+    else *_v &= ~(BV_ONE << bit);
+}
+
+static INLINE int bv_get(struct bitvector * bv, size_t n) {
+    const size_t bit = n&(BV_LENGTH-1);
+    const size_t c = n >> BV_MAGNITUDE;
+    return !!(bv->v[c] & (BV_ONE << bit));
+}
+
+static INLINE size_t bv_clz(struct bitvector * bv, size_t n) {
+    size_t bit = n&(BV_LENGTH-1);
+    size_t c = n >> BV_MAGNITUDE;
+    bv_int_t * _v = bv->v + c;
+    bv_int_t V = *_v & (~BV_NIL << bit);
+
+    fprintf(stderr, "bv_clz(%lu) ", (long unsigned)n);
+
+    bit = 0;
+    while (!(V)) {
+	if (bit >= bv->length) return (size_t)-1;
+	V = *(_v + ++c);
+	bit += (BV_WIDTH*8);
+    }
+    bit += BV_CTZ(V);
+
+    fprintf(stderr, "--> %lu\n", (long unsigned)bit);
+    return bit;
+}
+
+static INLINE void bv_print(struct bitvector * bv) {
+    size_t i;
+    for (i = 0; i < bv->length; i++) {
+	fprintf(stderr, "%d", bv_get(bv, i));
+    }
+    fprintf(stderr, "\n");
+}
+
 struct ba_block_header {
     struct ba_block_header * next;
 #ifdef BA_DEBUG
@@ -120,7 +203,37 @@ struct ba_page {
     struct ba_page *next, *prev;
     struct ba_page *hchain;
     uint32_t used;
+    uint32_t flags;
 };
+
+/*
+ * every allocator has one of these, which describe the layout of pages
+ * in a way that makes calculations easy
+ */
+
+struct ba_layout {
+    size_t offset;
+    uint32_t block_size;
+    uint32_t blocks;
+};
+
+#define BA_INIT_LAYOUT(block_size, blocks) { 0, block_size, blocks }
+
+#define BA_FLAG_SORTED	1
+
+#if 1
+static INLINE void ba_set_flag(struct ba_page * p, uint32_t flag) {
+    p->flags |= flag;
+}
+
+static INLINE void ba_unset_flag(struct ba_page * p, uint32_t flag) {
+    p->flags &= ~flag;
+}
+
+struct ba_block_header * ba_sort_list(const struct ba_page *,
+				      struct ba_block_header *,
+				      const struct ba_layout *);
+#endif
 
 typedef struct ba_page * ba_p;
 typedef struct ba_block_header * ba_b;
@@ -164,18 +277,6 @@ static INLINE uint32_t round_up32_(uint32_t v) {
 static INLINE uint32_t round_up32(const uint32_t v) {
     return round_up32_(v)+1;
 }
-/*
- * every allocator has one of these, which describe the layout of pages
- * in a way that makes calculations easy
- */
-
-struct ba_layout {
-    size_t offset;
-    uint32_t block_size;
-    uint32_t blocks;
-};
-
-#define BA_INIT_LAYOUT(block_size, blocks) { 0, block_size, blocks }
 
 static INLINE void ba_init_layout(struct ba_layout * l,
 				  const uint32_t block_size,

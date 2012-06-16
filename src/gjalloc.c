@@ -21,7 +21,7 @@ static INLINE void ba_htable_insert(const struct block_allocator * a,
 				    ba_p ptr);
 static INLINE void ba_htable_grow(struct block_allocator * a);
 
-#define BA_NBLOCK(a, p, ptr)	((uintptr_t)((char*)ptr - (char)(p+1))/(a)->l.block_size)
+#define BA_NBLOCK(l, p, ptr)	((uintptr_t)((char*)(ptr) - (char*)((p)+1))/(uintptr_t)((l).block_size))
 
 #define BA_DIVIDE(a, b)	    ((a) / (b) + (!!((a) & ((b)-1))))
 #define BA_PAGESIZE(l)	    ((l).offset + (l).block_size)
@@ -276,6 +276,7 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) 
 }
 
 EXPORT void ba_destroy(struct block_allocator * a) {
+    a->alloc->first = a->free_blk;
     PAGE_LOOP(a, {
 	MEM_RW_RANGE(p, BA_PAGESIZE(a->l));
 	free(p);
@@ -861,6 +862,137 @@ EXPORT void ba_lfree_all(struct ba_local * a) {
 	a->free_block = a->page->first;
     }
 }
+
+void ba_walk_page(const struct ba_layout * l,
+		  struct ba_page * p,
+		  void (*callback)(void*,void*,void*),
+		  void * data) {
+    const struct ba_block_header * b;
+    char * start;
+
+    if (!(p->flags & BA_FLAG_SORTED)) {
+	p->first = ba_sort_list(p, p->first, l);
+	ba_set_flag(p, BA_FLAG_SORTED);
+    }
+    b = p->first;
+
+    if (!b) {
+	/* page is full, walk all blocks */
+	start = (char*)BA_BLOCKN(*l, p, 0);
+	goto walk_rest;
+    }
+
+    if (b != BA_BLOCKN(*l, p, 0)) {
+	callback(BA_BLOCKN(*l, p, 0), (void*)b, data);
+    }
+
+    do {
+	struct ba_block_header * n = b->next;
+	start = (char*)b + l->block_size;
+	if (n == BA_ONE) return;
+	if (!n) break;
+	if ((char*)n > start) {
+	    callback(start, (char*)n, data);
+	}
+	b = n;
+    } while (b);
+
+    if (start <= (char*)BA_LASTBLOCK(*l, p)) {
+walk_rest:
+	callback(start, (char*)BA_LASTBLOCK(*l, p) + l->block_size, data);
+    }
+}
+
+void ba_walk(struct block_allocator * a,
+	     void (*callback)(void*,void*,void*),
+	     void * data) {
+    if (a->alloc)
+	a->alloc->first = a->free_blk;
+
+    PAGE_LOOP(a, {
+	if (p->used)
+	    ba_walk_page(&a->l, p, callback, data);
+    });
+
+    if (a->alloc)
+	a->free_blk = a->alloc->first;
+}
+
+
+struct ba_block_header * ba_sort_list(const struct ba_page * p,
+				      struct ba_block_header * b,
+				      const struct ba_layout * l) {
+    struct bitvector v;
+    size_t i, j;
+    struct ba_block_header ** t = &b;
+
+#ifdef BA_DEBUG
+    fprintf(stderr, "sorting max %llu blocks\n",
+	    (unsigned long long)l->blocks);
+#endif
+    v.length = l->blocks;
+    i = bv_byte_length(&v);
+    bv_set_vector(&v, BA_XALLOC(i));
+    memset(v.v, 0, i);
+
+    /*
+     * store the position of all blocks in a bitmask
+     */
+    while (b) {
+	uintptr_t n = BA_NBLOCK(*l, p, b);
+#ifdef BA_DEBUG
+	fprintf(stderr, "block %llu is free\n", (long long unsigned)n);
+#endif
+	bv_set(&v, n, 1);
+	if (b->next == BA_ONE) {
+	    v.length = n+1;
+	    break;
+	} else b = b->next;
+    }
+
+#ifdef BA_DEBUG
+    bv_print(&v);
+#endif
+
+    /*
+     * Handle consecutive free blocks in the end, those
+     * we dont need anyway.
+     */
+    if (v.length) {
+	i = v.length-1;
+	while (i && bv_get(&v, i)) { i--; }
+	v.length = i+1;
+    }
+
+#ifdef BA_DEBUG
+    bv_print(&v);
+#endif
+
+    j = 0;
+
+    /*
+     * We now rechain all blocks.
+     */
+    while ((i = bv_clz(&v, j)) != (size_t)-1) {
+	if (i < j) return b;
+	*t = BA_BLOCKN(*l, p, i);
+	t = &((*t)->next);
+	j = i+1;
+    }
+
+    /*
+     * The last one
+     */
+    if (v.length < l->blocks) {
+	(*t)->next = BA_BLOCKN(*l, p, v.length);
+	BA_BLOCKN(*l, p, v.length)->next = BA_ONE;
+    } else (*t)->next = NULL;
+
+    free(v.v);
+
+    return b;
+}
+
 
 #ifdef __cplusplus
 }
