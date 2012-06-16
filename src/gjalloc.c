@@ -828,7 +828,8 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 		ba_init(a->a, l.block_size, l.blocks);
 		/* transform here! */
 		a->page->next = a->page->prev = NULL;
-		a->a->first = a->page;
+		a->a->num_pages ++;
+		//a->a->first = a->page;
 		ba_htable_insert(a->a, a->page);
 	    }
 	} else {
