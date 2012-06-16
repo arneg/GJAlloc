@@ -166,6 +166,8 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 
     a->empty = a->first = NULL;
     a->last_free = NULL;
+    a->alloc = NULL;
+    a->free_blk = NULL;
 
 #ifdef BA_DEBUG
     fprintf(stderr, "blocks: %u block_size: %u page_size: %u\n",
@@ -826,6 +828,7 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 		ba_init(a->a, l.block_size, l.blocks);
 		/* transform here! */
 		a->page->next = a->page->prev = NULL;
+		a->a->first = a->page;
 		ba_htable_insert(a->a, a->page);
 	    }
 	} else {
