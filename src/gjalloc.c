@@ -171,7 +171,7 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 
 #ifdef BA_DEBUG
     fprintf(stderr, "blocks: %u block_size: %u page_size: %u\n",
-	    blocks, block_size, page_size);
+	    blocks, block_size, BA_PAGESIZE(a->l));
 #endif
 
 
