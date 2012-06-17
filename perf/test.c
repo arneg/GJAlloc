@@ -15,8 +15,6 @@ struct foo {
     char p[SIZE];
 };
 
-static struct foo blue = { "foobarflubar" };
-
 unsigned long long int diff(struct timespec t1, struct timespec t2) {
     return (t2.tv_sec - t1.tv_sec) * 1000000000ULL + (t2.tv_nsec - t1.tv_nsec);
 }
@@ -85,7 +83,6 @@ int main(int argc, char ** argv) {
     p = (void**)malloc(sizeof(void*) * N);
     uint32_t * map = (uint32_t*)malloc(sizeof(uint32_t) * N);
     srand ( time(NULL) );
-    long int loops;
 
 #ifndef REAL_RANDOM
 # ifdef SEED
