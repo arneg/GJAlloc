@@ -276,7 +276,6 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) 
 }
 
 EXPORT void ba_destroy(struct block_allocator * a) {
-    a->alloc->first = a->free_blk;
     PAGE_LOOP(a, {
 	MEM_RW_RANGE(p, BA_PAGESIZE(a->l));
 	free(p);
