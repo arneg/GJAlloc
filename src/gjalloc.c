@@ -206,6 +206,7 @@ static INLINE void ba_free_page(const struct ba_layout * l, ba_p p,
     const char * bp = (char*)blueprint;
     p->first = BA_BLOCKN(*l, p, 0);
     p->used = 0;
+    p->flags = 0;
 
     if (bp)
 	BA_CMEMSET((char*)(p+1), bp, l->block_size, l->blocks);
@@ -902,7 +903,7 @@ walk_rest:
     }
 }
 
-void ba_walk(struct block_allocator * a,
+EXPORT void ba_walk(struct block_allocator * a,
 	     void (*callback)(void*,void*,void*),
 	     void * data) {
     if (a->alloc)
@@ -915,6 +916,16 @@ void ba_walk(struct block_allocator * a,
 
     if (a->alloc)
 	a->free_blk = a->alloc->first;
+}
+
+EXPORT void ba_walk_local(struct ba_local * a,
+	     void (*callback)(void*,void*,void*),
+	     void * data) {
+    a->page->first = a->free_block;
+    if (!a->a) {
+	if (a->page)
+	    ba_walk_page(&a->l, a->page, callback, data);
+    }
 }
 
 
@@ -983,7 +994,7 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
      * The last one
      */
     if (v.length < l->blocks) {
-	(*t)->next = BA_BLOCKN(*l, p, v.length);
+	*t = BA_BLOCKN(*l, p, v.length);
 	BA_BLOCKN(*l, p, v.length)->next = BA_ONE;
     } else (*t)->next = NULL;
 

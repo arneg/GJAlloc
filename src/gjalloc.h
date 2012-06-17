@@ -109,8 +109,6 @@ extern char errbuf[];
 #endif
 
 #if SIZEOF_LONG == 8 || SIZEOF_LONG_LONG == 8
-#define BV_WIDTH    8
-#define BV_MAGNITUDE    3
 #define BV_LENGTH   64
 #define BV_ONE	    ((uint64_t)1)
 #define BV_NIL	    ((uint64_t)0)
@@ -123,8 +121,6 @@ extern char errbuf[];
 #endif
 typedef uint64_t bv_int_t;
 #else
-#define BV_WIDTH    4
-#define BV_MAGNITUDE    2
 #define BV_LENGTH   32
 #define BV_ONE	    ((uint32_t)1)
 #define BV_NIL	    ((uint32_t)0)
@@ -133,10 +129,14 @@ typedef uint64_t bv_int_t;
 typedef uint32_t bv_int_t;
 #endif
 
+#define BV_WIDTH    (BV_LENGTH/8)
+
 struct bitvector {
     size_t length;
     bv_int_t * v;
 };
+static INLINE void bv_print(struct bitvector * bv);
+
 static INLINE void bv_set_vector(struct bitvector * bv, void * p) {
     bv->v = (bv_int_t*)p;
 }
@@ -151,7 +151,7 @@ static INLINE size_t bv_byte_length(struct bitvector * bv) {
 
 static INLINE void bv_set(struct bitvector * bv, size_t n, int value) {
     const size_t bit = n&(BV_LENGTH-1);
-    const size_t c = n >> BV_MAGNITUDE;
+    const size_t c = n / BV_LENGTH;
     bv_int_t * _v = bv->v + c;
     if (value) *_v |= BV_ONE << bit;
     else *_v &= ~(BV_ONE << bit);
@@ -159,26 +159,30 @@ static INLINE void bv_set(struct bitvector * bv, size_t n, int value) {
 
 static INLINE int bv_get(struct bitvector * bv, size_t n) {
     const size_t bit = n&(BV_LENGTH-1);
-    const size_t c = n >> BV_MAGNITUDE;
+    const size_t c = n / BV_LENGTH;
     return !!(bv->v[c] & (BV_ONE << bit));
 }
 
 static INLINE size_t bv_clz(struct bitvector * bv, size_t n) {
     size_t bit = n&(BV_LENGTH-1);
-    size_t c = n >> BV_MAGNITUDE;
+    size_t c = n / BV_LENGTH;
     bv_int_t * _v = bv->v + c;
     bv_int_t V = *_v & (~BV_NIL << bit);
 
-    fprintf(stderr, "bv_clz(%lu) ", (long unsigned)n);
 
-    bit = 0;
+    bit = c * BV_LENGTH;
     while (!(V)) {
-	if (bit >= bv->length) return (size_t)-1;
-	V = *(_v + ++c);
+	if (bit >= bv->length) {
+	    bit = (size_t)-1;
+	    goto RET;
+	}
+	V = *(++_v);
 	bit += (BV_WIDTH*8);
     }
     bit += BV_CTZ(V);
+    if (bit >= bv->length) bit = (size_t)-1;
 
+RET:
     fprintf(stderr, "--> %lu\n", (long unsigned)bit);
     return bit;
 }
@@ -354,6 +358,8 @@ EXPORT void ba_print_stats(struct block_allocator * a);
 EXPORT void ba_free_all(struct block_allocator * a);
 EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size);
 EXPORT void ba_destroy(struct block_allocator * a);
+EXPORT void ba_walk(struct block_allocator * a, void (*callback)(void*,void*,void*),
+		    void * data);
 
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
 #define BA_BLOCKN(l, p, n) ((ba_b)(((char*)(p+1)) + (n)*((l).block_size)))
@@ -568,6 +574,7 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 EXPORT void ba_local_get_page(struct ba_local * a);
 EXPORT void ba_ldestroy(struct ba_local * a);
 EXPORT void ba_lfree_all(struct ba_local * a);
+EXPORT void ba_walk_local(struct ba_local * a, void (*callback)(void*,void*,void*), void * data);
 
 ATTRIBUTE((malloc))
 static INLINE void * ba_lalloc(struct ba_local * a) {
