@@ -942,6 +942,8 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
 #endif
     v.length = l->blocks;
     i = bv_byte_length(&v);
+    /* we should probably reuse an area for this.
+     */
     bv_set_vector(&v, BA_XALLOC(i));
     memset(v.v, 0, i);
 
