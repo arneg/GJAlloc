@@ -494,7 +494,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 /* goto considered harmful */
 #define LOW_PAGE_LOOP2(a, label, C...)	do {			\
     uint32_t __n;						\
-    for (__n = 0; __n < a->allocated; __n++) {			\
+    if (a->pages) for (__n = 0; __n < a->allocated; __n++) {	\
 	ba_p p = a->pages[__n];					\
 	while (p) {						\
 	    ba_p t = p->hchain;					\
