@@ -44,9 +44,10 @@ EXPORT void ba_show_pages(const struct block_allocator * a) {
     PRINT_NODE(a, first);
     PRINT_NODE(a, last_free);
 
+    a->alloc->h = a->h;
     PAGE_LOOP(a, {
 	uint32_t blocks_used;
-	blocks_used = p->used;
+	blocks_used = p->h.used;
 	fprintf(stderr, "(%p)\t%f\t(%u %d) --> (prev: %p | next: %p)\n",
 		p, blocks_used/(double)a->l.blocks * 100,
 		blocks_used,
@@ -167,7 +168,7 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
     a->empty = a->first = NULL;
     a->last_free = NULL;
     a->alloc = NULL;
-    a->free_blk = NULL;
+    a->h.first = NULL;
 
 #ifdef BA_DEBUG
     fprintf(stderr, "blocks: %u block_size: %u page_size: %u\n",
@@ -193,7 +194,7 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 #endif
 
 #ifdef BA_DEBUG
-    fprintf(stderr, " -> blocks: %u block_size: %u page_size: %u mallocing size: %lu, next pages: %u magnitude: %u\n",
+    fprintf(stderr, " -> blocks: %u block_size: %u page_size: %u mallocing size: %u, next pages: %u magnitude: %u\n",
 	    a->l.blocks, block_size, BA_PAGESIZE(a->l)-sizeof(struct ba_page),
 	    BA_PAGESIZE(a->l),
 	    round_up32(BA_PAGESIZE(a->l)),
@@ -201,12 +202,13 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 #endif
 }
 
-static INLINE void ba_free_page(const struct ba_layout * l, ba_p p,
+static INLINE void ba_free_page(const struct ba_layout * l,
+				struct ba_page * p,
 				const void * blueprint) {
     const char * bp = (char*)blueprint;
-    p->first = BA_BLOCKN(*l, p, 0);
-    p->used = 0;
-    p->flags = 0;
+    p->h.first = BA_BLOCKN(*l, p, 0);
+    p->h.used = 0;
+    p->h.flags = BA_FLAG_SORTED;
 
     if (bp)
 	BA_CMEMSET((char*)(p+1), bp, l->block_size, l->blocks);
@@ -226,7 +228,7 @@ static INLINE void ba_free_page(const struct ba_layout * l, ba_p p,
 	BA_LASTBLOCK(*l, p)->next = NULL;
     } while (0);
 #else
-    p->first->next = BA_ONE;
+    p->h.first->next = BA_ONE;
 #endif
 }
 
@@ -238,7 +240,7 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
 	free(p);
     });
 
-    a->free_blk = NULL;
+    a->h.first = NULL;
     a->alloc = NULL;
     a->num_pages = 0;
     a->empty_pages = 0;
@@ -249,29 +251,15 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
 }
 
 EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) {
-    ba_b t;
     size_t n = 0;
 
     /* fprintf(stderr, "page_size: %u, pages: %u\n", BA_PAGESIZE(a->l), a->num_pages); */
     *size = BA_BYTES(a) + a->num_pages * BA_PAGESIZE(a->l);
+    if (a->alloc)
+	a->alloc->h = a->h;
     PAGE_LOOP(a, {
-	if (p == a->alloc) continue;
-	n += p->used;
+	n += p->h.used;
     });
-
-    t = a->free_blk;
-    if (t) {
-	n += a->l.blocks;
-	while (t) {
-	    n--;
-	    if (t->next == BA_ONE) {
-		t = (ba_b)(((char*)t) + a->l.block_size);
-		t->next = (ba_b)(size_t)!(t == BA_LASTBLOCK(a->l, a->alloc));
-	    } else {
-		t = t->next;
-	    }
-	}
-    }
 
     *num = n;
 }
@@ -282,7 +270,7 @@ EXPORT void ba_destroy(struct block_allocator * a) {
 	free(p);
     });
 
-    a->free_blk = NULL;
+    a->h.first = NULL;
     a->alloc = NULL;
     MEM_RW_RANGE(a->pages, BA_BYTES(a));
     free(a->pages);
@@ -509,6 +497,9 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
     int bad = 0;
     ba_p p;
 
+    if (a->alloc)
+	a->alloc->h = a->h;
+
     if (a->empty_pages > a->num_pages) {
 	fprintf(stderr, "too many empty pages.\n");
 	bad = 1;
@@ -519,7 +510,7 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 	p = a->pages[n];
 
 	while (p) {
-	    if (!p->first && p != a->first) {
+	    if (p != a->alloc) {
 		if (p->prev || p->next) {
 		    fprintf(stderr, "page %p is full but in list. next: %p"
 			     "prev: %p\n",
@@ -602,15 +593,14 @@ EXPORT void ba_low_alloc(struct block_allocator * a) {
     ba_check_allocator(a, "ba_alloc top", __FILE__, __LINE__);
 #endif
     if (a->alloc) {
-	a->alloc->first = NULL;
-	a->alloc->used = a->l.blocks;
+	a->alloc->h = a->h;
     }
 
     a->alloc = ba_get_page(a);
-    a->free_blk = a->alloc->first;
+    a->h = a->alloc->h;
 
 #ifdef BA_DEBUG
-    if (!a->free_blk) {
+    if (!a->h.first) {
 	ba_show_pages(a);
 	BA_ERROR("a->first has no first block!\n");
     }
@@ -622,15 +612,15 @@ EXPORT void ba_low_alloc(struct block_allocator * a) {
 }
 
 EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
-    if (!p->used) {
+    if (!p->h.used) {
 	INC(free_empty);
 	DOUBLE_UNLINK(a->first, p);
 #ifndef BA_CHAIN_PAGE
 	/* reset the internal list. this avoids fragmentation which would otherwise
 	 * happen when reusing pages. Since that is cheap here, we do it.
 	 */
-	p->first = BA_BLOCKN(a->l, p, 0);
-	p->first->next = BA_ONE;
+	p->h.first = BA_BLOCKN(a->l, p, 0);
+	p->h.first->next = BA_ONE;
 #endif
 	SINGLE_LINK(a->empty, p);
 	a->empty_pages ++;
@@ -768,7 +758,7 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
     }
 
     ba_init_layout(&a->l, block_size, blocks);
-    a->free_block = NULL;
+    a->h.first = NULL;
     a->page = (ba_p)NULL;
     a->max_blocks = max_blocks;
     a->a = NULL;
@@ -780,12 +770,11 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
     if (a->a) {
 	/* old page is full */
 	if (a->page) {
-	    a->page->first = NULL;
-	    a->page->used = a->l.blocks;
+	    a->page->h = a->h;
 	}
 	/* get page from allocator */
 	a->page = ba_get_page(a->a);
-	a->free_block = a->page->first;
+	a->h = a->page->h;
     } else {
 	if (a->page) {
 	    struct ba_block_header * stop;
@@ -805,7 +794,8 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 
 #ifdef BA_DEBUG
 	    fprintf(stderr, "realloc from %lu to %lu bytes.\n",
-		    BA_PAGESIZE(a->l), BA_PAGESIZE(l));
+		   (long unsigned)BA_PAGESIZE(a->l),
+		   (long unsigned)BA_PAGESIZE(l));
 #endif
 
 	    p = (ba_p)BA_XREALLOC(a->page, BA_PAGESIZE(l));
@@ -816,8 +806,8 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 		a->page = p;
 		a->rel.simple(BA_BLOCKN(l, p, 0), stop, diff);
 	    }
-	    a->free_block = stop;
-	    a->free_block->next = BA_ONE;
+	    a->h.first = stop;
+	    a->h.first->next = BA_ONE;
 	    a->l = l;
 
 	    if (transform) {
@@ -837,7 +827,7 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 	    ba_init_layout(&a->l, a->l.block_size, a->l.blocks);
 	    a->page = (ba_p)BA_XALLOC(BA_PAGESIZE(a->l));
 	    ba_free_page(&a->l, a->page, NULL);
-	    a->free_block = a->page->first;
+	    a->h = a->page->h;
 	}
     }
 }
@@ -851,15 +841,16 @@ EXPORT void ba_ldestroy(struct ba_local * a) {
 	free(a->page);
     }
     a->page = NULL;
-    a->free_block = NULL;
+    a->h.first = NULL;
 }
 
 EXPORT void ba_lfree_all(struct ba_local * a) {
     if (a->a) {
 	ba_free_all(a->a);
     } else {
+	/* could be only in a->h */
 	ba_free_page(&a->l, a->page, NULL);
-	a->free_block = a->page->first;
+	a->h = a->page->h;
     }
 }
 
@@ -870,11 +861,11 @@ void ba_walk_page(const struct ba_layout * l,
     const struct ba_block_header * b;
     char * start;
 
-    if (!(p->flags & BA_FLAG_SORTED)) {
-	p->first = ba_sort_list(p, p->first, l);
-	ba_set_flag(p, BA_FLAG_SORTED);
+    if (!(p->h.flags & BA_FLAG_SORTED)) {
+	p->h.first = ba_sort_list(p, p->h.first, l);
+	p->h.flags |= BA_FLAG_SORTED;
     }
-    b = p->first;
+    b = p->h.first;
 
     if (!b) {
 	/* page is full, walk all blocks */
@@ -907,25 +898,28 @@ EXPORT void ba_walk(struct block_allocator * a,
 	     void (*callback)(void*,void*,void*),
 	     void * data) {
     if (a->alloc)
-	a->alloc->first = a->free_blk;
+	a->alloc->h = a->h;
 
     PAGE_LOOP(a, {
-	if (p->used)
+	if (p->h.used)
 	    ba_walk_page(&a->l, p, callback, data);
     });
 
     if (a->alloc)
-	a->free_blk = a->alloc->first;
+	a->h = a->alloc->h;
 }
 
 EXPORT void ba_walk_local(struct ba_local * a,
 	     void (*callback)(void*,void*,void*),
 	     void * data) {
-    a->page->first = a->free_block;
+    if (a->page)
+	a->page->h = a->h;
     if (!a->a) {
 	if (a->page)
 	    ba_walk_page(&a->l, a->page, callback, data);
     }
+    if (a->page)
+	a->h = a->page->h;
 }
 
 
