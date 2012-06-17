@@ -163,7 +163,7 @@ static INLINE int bv_get(struct bitvector * bv, size_t n) {
     return !!(bv->v[c] & (BV_ONE << bit));
 }
 
-static INLINE size_t bv_clz(struct bitvector * bv, size_t n) {
+static INLINE size_t bv_ctz(struct bitvector * bv, size_t n) {
     size_t bit = n&(BV_LENGTH-1);
     size_t c = n / BV_LENGTH;
     bv_int_t * _v = bv->v + c;
