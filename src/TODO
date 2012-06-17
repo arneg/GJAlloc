@@ -1,0 +1,25 @@
+* block walking
+* relocation
+    add the following api to allow iterators to get their relocation
+    callbacks called for the blocks they are in. the ba_relocation_callback
+    structs would be chained into sorted linked lists, which get traversed
+    at the same time as the block walker during relocation. the update call
+    has todo one BA_CHECK_PTR only most of the time (hopefully). It will be
+    more expensive when a hash lookup has to be performed. hence, building
+    the data structure in the right order would be faster for iteration.
+
+    ba_register_relocation(struct ba_local *,
+			   struct ba_relocation_callback *,
+			   const void * ptr)
+
+    ba_update_relocation(struct ba_local * ,
+			 struct ba_relocation_callback *,
+			 const void * ptr) /* new ptr */
+
+    ba_delete_relocation(struct ba_local *,
+			 struct ba_relocation_callback *)
+
+    An alternative solution would be to only use one relocation callback and
+    have that one take care of informing all iterators. this would be preferable
+    in most cases since iterators are rare, and like that relocations would not
+    have to handle the extra overhead.
