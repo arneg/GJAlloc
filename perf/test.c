@@ -12,7 +12,8 @@
 #define SIZE	32
 
 struct foo {
-    char p[SIZE];
+    void ** ptr;
+    char p[SIZE-sizeof(void*)];
 };
 
 unsigned long long int diff(struct timespec t1, struct timespec t2) {
@@ -53,6 +54,7 @@ long int run2(long int n, uint32_t * shuffler) {
     for (i = 0; i < runs; i++) {
 	for (j = 0; j < n; j++) {
 	    p[j] = TEST_ALLOC(foo);
+	    ((struct foo *)p[j])->ptr = p + j;
 	}
 	for (j = 0; j < n; j++) {
 	    long int k = shuffler[j];
