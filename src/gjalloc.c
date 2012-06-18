@@ -801,7 +801,7 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 	    p = (ba_p)BA_XREALLOC(a->page, BA_PAGESIZE(l));
 	    stop = (struct ba_block_header *)
 		    ((char*)BA_LASTBLOCK(a->l, p) + l.block_size);
-	    diff = (char*)a->page - (char*)p;
+	    diff = (char*)p - (char*)a->page;
 	    if (diff) {
 		a->page = p;
 		a->rel.simple(BA_BLOCKN(l, p, 0), stop, diff);
