@@ -251,7 +251,7 @@ typedef struct ba_page * ba_p;
 typedef struct ba_block_header * ba_b;
 
 /* we assume here that malloc has sizeof(void*) bytes of overhead */
-#define BLOCK_HEADER_SIZE (sizeof(void*))
+#define MALLOC_OVERHEAD (sizeof(void*))
 
 
 #ifdef BA_STATS
@@ -437,11 +437,11 @@ static INLINE void ba_init_layout(struct ba_layout * l,
 
 static INLINE void ba_align_layout(struct ba_layout * l) {
     /* overrun anyone ? ,) */
-    uint32_t page_size = l->offset + l->block_size + BLOCK_HEADER_SIZE;
+    uint32_t page_size = l->offset + l->block_size + MALLOC_OVERHEAD;
     if (page_size & (page_size - 1)) {
 	page_size = round_up32(page_size);
     }
-    page_size -= BLOCK_HEADER_SIZE + sizeof(struct ba_page);
+    page_size -= MALLOC_OVERHEAD + sizeof(struct ba_page);
     ba_init_layout(l, l->block_size, page_size/l->block_size);
 }
 
