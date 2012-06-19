@@ -604,13 +604,21 @@ EXPORT void ba_ldestroy(struct ba_local * a);
 EXPORT void ba_lfree_all(struct ba_local * a);
 EXPORT void ba_walk_local(struct ba_local * a, void (*callback)(void*,void*,void*), void * data);
 
+static INLINE void ba_lreserve(struct ba_local * a, size_t n) {
+    if (n == 1) {
+	if (ba_empty(&a->h)) {
+	    ba_local_get_page(a);
+	}
+    } else {
+	/* TODO */
+    }
+}
+
 ATTRIBUTE((malloc))
 static INLINE void * ba_lalloc(struct ba_local * a) {
     ba_b ptr;
 
-    if (ba_empty(&a->h)) {
-	ba_local_get_page(a);
-    }
+    ba_lreserve(a, 1);
 
     ptr = ba_shift(&a->h, a->page, &a->l);
 
