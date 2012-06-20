@@ -23,7 +23,6 @@ static INLINE void ba_htable_grow(struct block_allocator * a);
 
 #define BA_NBLOCK(l, p, ptr)	((uintptr_t)((char*)(ptr) - (char*)((p)+1))/(uintptr_t)((l).block_size))
 
-#define BA_DIVIDE(a, b)	    ((a) / (b) + (!!((a) & ((b)-1))))
 #define BA_PAGESIZE(l)	    ((l).offset + (l).block_size)
 #define BA_HASH_MASK(a)  (((a->allocated)) - 1)
 
