@@ -600,18 +600,29 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 			  void (*simple)(void*, void*, ptrdiff_t),
 			  void (*relocate)(void*, void*, size_t));
 
+EXPORT void ba_local_grow(struct ba_local * a, uint32_t blocks);
 EXPORT void ba_local_get_page(struct ba_local * a);
 EXPORT void ba_ldestroy(struct ba_local * a);
 EXPORT void ba_lfree_all(struct ba_local * a);
-EXPORT void ba_walk_local(struct ba_local * a, void (*callback)(void*,void*,void*), void * data);
+EXPORT void ba_walk_local(struct ba_local * a,
+			  void (*callback)(void*,void*,void*), void * data);
 
-static INLINE void ba_lreserve(struct ba_local * a, size_t n) {
-    if (n == 1) {
-	if (ba_empty(&a->h)) {
-	    ba_local_get_page(a);
+/*
+ * Guarentee that for a minimum of n allocations no relocation will be
+ * triggered.
+ */
+static INLINE void ba_lreserve(struct ba_local * a, uint32_t n) {
+    if (!a->a) {
+
+	n += a->h.used;
+
+	if (a->l.blocks < n) {
+	    uint32_t blocks = a->l.blocks * 2;
+
+	    while (blocks < n) blocks *= 2;
+
+	    ba_local_grow(a, blocks);
 	}
-    } else {
-	/* TODO */
     }
 }
 
@@ -619,7 +630,8 @@ ATTRIBUTE((malloc))
 static INLINE void * ba_lalloc(struct ba_local * a) {
     ba_b ptr;
 
-    ba_lreserve(a, 1);
+    if (ba_empty(&a->h))
+	ba_local_get_page(a);
 
     ptr = ba_shift(&a->h, a->page, &a->l);
 

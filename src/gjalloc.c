@@ -766,6 +766,58 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
     a->rel.relocate = relocate;
 }
 
+static INLINE struct ba_page * ba_local_grow_page(struct ba_page * p,
+					   struct ba_page_header * h,
+					   const struct ba_layout * l,
+					   const struct ba_relocation * rel) {
+
+    struct ba_block_header * stop;
+    ptrdiff_t diff;
+    struct ba_page * n;
+
+    n = (ba_p)BA_XREALLOC(p, BA_PAGESIZE(*l));
+    stop = BA_BLOCKN(*l, n, h->used);
+    diff = (char*)n - (char*)p;
+    if (diff) {
+	rel->simple(BA_BLOCKN(*l, p, 0), stop, diff);
+    }
+    h->first = stop;
+    h->first->next = BA_ONE;
+
+    return p;
+}
+
+EXPORT INLINE void ba_local_grow(struct ba_local * a, uint32_t blocks) {
+    struct ba_layout l;
+    int transform = 0;
+
+    if (blocks >= a->max_blocks) {
+	ba_init_layout(&l, a->l.block_size, a->max_blocks);
+	ba_align_layout(&l);
+	transform = 1;
+    } else {
+	ba_init_layout(&l, a->l.block_size, blocks);
+    }
+
+    a->page = ba_local_grow_page(a->page, &a->h, &l, &a->rel);
+    a->l = l;
+
+    if (transform) {
+#ifdef BA_DEBUG
+	fprintf(stderr, "transforming into allocator\n");
+#endif
+	a->a = (struct block_allocator *)
+		BA_XALLOC(sizeof(struct block_allocator));
+	ba_init(a->a, l.block_size, l.blocks);
+	/* transform here! */
+	a->page->next = a->page->prev = NULL;
+	a->a->num_pages ++;
+	//a->a->first = a->page;
+	ba_htable_insert(a->a, a->page);
+    }
+}
+
+
 EXPORT void ba_local_get_page(struct ba_local * a) {
     if (a->a) {
 	/* old page is full */
@@ -777,52 +829,8 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 	a->h = a->page->h;
     } else {
 	if (a->page) {
-	    struct ba_block_header * stop;
-	    struct ba_layout l;
-	    ptrdiff_t diff;
-	    ba_p p;
-	    int transform = 0;
-
-	    l.block_size = a->l.block_size;
-	    l.blocks = a->l.blocks * 2;
-
-	    if (l.blocks >= a->max_blocks) {
-		ba_init_layout(&l, l.block_size, a->max_blocks);
-		ba_align_layout(&l);
-		transform = 1;
-	    } else ba_init_layout(&l, l.block_size, l.blocks);
-
-#ifdef BA_DEBUG
-	    fprintf(stderr, "realloc from %lu to %lu bytes.\n",
-		   (long unsigned)BA_PAGESIZE(a->l),
-		   (long unsigned)BA_PAGESIZE(l));
-#endif
-
-	    p = (ba_p)BA_XREALLOC(a->page, BA_PAGESIZE(l));
-	    stop = (struct ba_block_header *)
-		    ((char*)BA_LASTBLOCK(a->l, p) + l.block_size);
-	    diff = (char*)p - (char*)a->page;
-	    if (diff) {
-		a->page = p;
-		a->rel.simple(BA_BLOCKN(l, p, 0), stop, diff);
-	    }
-	    a->h.first = stop;
-	    a->h.first->next = BA_ONE;
-	    a->l = l;
-
-	    if (transform) {
-#ifdef BA_DEBUG
-		fprintf(stderr, "transforming into allocator\n");
-#endif
-		a->a = (struct block_allocator *)
-			BA_XALLOC(sizeof(struct block_allocator));
-		ba_init(a->a, l.block_size, l.blocks);
-		/* transform here! */
-		a->page->next = a->page->prev = NULL;
-		a->a->num_pages ++;
-		//a->a->first = a->page;
-		ba_htable_insert(a->a, a->page);
-	    }
+	    /* double the size */
+	    ba_local_grow(a, a->l.blocks*2);
 	} else {
 	    ba_init_layout(&a->l, a->l.block_size, a->l.blocks);
 	    a->page = (ba_p)BA_XALLOC(BA_PAGESIZE(a->l));
