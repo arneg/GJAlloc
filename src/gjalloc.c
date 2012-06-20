@@ -779,12 +779,12 @@ static INLINE struct ba_page * ba_local_grow_page(struct ba_page * p,
     stop = BA_BLOCKN(*l, n, h->used);
     diff = (char*)n - (char*)p;
     if (diff) {
-	rel->simple(BA_BLOCKN(*l, p, 0), stop, diff);
+	rel->simple(BA_BLOCKN(*l, n, 0), stop, diff);
     }
     h->first = stop;
     h->first->next = BA_ONE;
 
-    return p;
+    return n;
 }
 
 EXPORT INLINE void ba_local_grow(struct ba_local * a, uint32_t blocks) {
