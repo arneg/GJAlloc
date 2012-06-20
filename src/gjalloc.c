@@ -787,7 +787,8 @@ static INLINE struct ba_page * ba_local_grow_page(struct ba_page * p,
     return n;
 }
 
-EXPORT INLINE void ba_local_grow(struct ba_local * a, uint32_t blocks) {
+EXPORT INLINE void ba_local_grow(struct ba_local * a,
+				 const uint32_t blocks) {
     struct ba_layout l;
     int transform = 0;
 
@@ -925,7 +926,7 @@ EXPORT void ba_walk_local(struct ba_local * a,
     if (!a->a) {
 	if (a->page)
 	    ba_walk_page(&a->l, a->page, callback, data);
-    }
+    } else ba_walk(a->a, callback, data);
     if (a->page)
 	a->h = a->page->h;
 }
