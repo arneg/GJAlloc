@@ -111,7 +111,6 @@ EXPORT void ba_print_stats(struct block_allocator * a) {
 }
 #endif
 
-/* #define BA_ALIGNMENT	8 */
 
 #ifndef BA_CMEMSET
 static INLINE void cmemset(char * dst, const char * src, size_t s,
@@ -154,11 +153,6 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
     if (block_size < sizeof(struct ba_block_header)) {
 	block_size = sizeof(struct ba_block_header);
     }
-
-#ifdef BA_ALIGNMENT
-    if (block_size & (BA_ALIGNMENT - 1))
-	block_size += (BA_ALIGNMENT - (block_size & (BA_ALIGNMENT - 1)));
-#endif
 
     if (!blocks) blocks = 512;
 
