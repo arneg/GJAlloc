@@ -400,13 +400,11 @@ static INLINE struct ba_block_header * ba_shift(struct ba_page_header * h,
 						const struct ba_layout * l) {
     struct ba_block_header * ptr = h->first;
 
-#ifndef BA_CHAIN_PAGE
     if (ptr->next == BA_ONE) {
 	h->first = (ba_b)(((char*)ptr) + l->block_size);
 	h->first->next = (ba_b)(size_t)!(h->first == BA_LASTBLOCK(*l, p));
 	h->flags |= BA_FLAG_SORTED;
     } else
-#endif
 	h->first = ptr->next;
 
     h->used++;

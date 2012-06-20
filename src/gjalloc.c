@@ -213,23 +213,7 @@ static INLINE void ba_free_page(const struct ba_layout * l,
     if (bp)
 	BA_CMEMSET((char*)(p+1), bp, l->block_size, l->blocks);
 
-#ifdef BA_CHAIN_PAGE
-    do {
-	char * ptr = (char*)(p+1);
-	
-	while (ptr < BA_LASTBLOCK(*l, p)) {
-#ifdef BA_DEBUG
-	    MEM_RW(((ba_b)ptr)->magic);
-	    ((ba_b)ptr)->magic = BA_MARK_FREE;
-#endif
-	    ((ba_b)ptr)->next = (ba_b)(ptr+l->block_size);
-	    ptr+=l->block_size;
-	}
-	BA_LASTBLOCK(*l, p)->next = NULL;
-    } while (0);
-#else
     p->h.first->next = BA_ONE;
-#endif
 }
 
 EXPORT INLINE void ba_free_all(struct block_allocator * a) {
@@ -615,13 +599,11 @@ EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
     if (!p->h.used) {
 	INC(free_empty);
 	DOUBLE_UNLINK(a->first, p);
-#ifndef BA_CHAIN_PAGE
 	/* reset the internal list. this avoids fragmentation which would otherwise
 	 * happen when reusing pages. Since that is cheap here, we do it.
 	 */
 	p->h.first = BA_BLOCKN(a->l, p, 0);
 	p->h.first->next = BA_ONE;
-#endif
 	SINGLE_LINK(a->empty, p);
 	a->empty_pages ++;
 	if (a->empty_pages >= a->max_empty_pages) {
