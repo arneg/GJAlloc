@@ -391,7 +391,7 @@ static INLINE void ba_unshift(struct ba_page_header * h,
     b->next = h->first;
     h->first = b;
     h->used --;
-    h->flags &= ~BA_FLAG_SORTED;
+    if (b > b->next) h->flags &= ~BA_FLAG_SORTED;
 }
 
 ATTRIBUTE((malloc))
@@ -404,6 +404,7 @@ static INLINE struct ba_block_header * ba_shift(struct ba_page_header * h,
     if (ptr->next == BA_ONE) {
 	h->first = (ba_b)(((char*)ptr) + l->block_size);
 	h->first->next = (ba_b)(size_t)!(h->first == BA_LASTBLOCK(*l, p));
+	h->flags |= BA_FLAG_SORTED;
     } else
 #endif
 	h->first = ptr->next;
