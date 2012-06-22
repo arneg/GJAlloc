@@ -321,7 +321,9 @@ EXPORT void ba_check_allocator(struct block_allocator * a, char*, char*, int);
 EXPORT void ba_print_stats(struct block_allocator * a);
 #endif
 EXPORT void ba_free_all(struct block_allocator * a);
-EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size);
+EXPORT size_t ba_count(const struct block_allocator * a);
+EXPORT void ba_count_all(const struct block_allocator * a, size_t *num,
+			 size_t *size);
 EXPORT void ba_destroy(struct block_allocator * a);
 EXPORT void ba_walk(struct block_allocator * a, void (*callback)(void*,void*,void*),
 		    void * data);
@@ -359,6 +361,10 @@ static ATTRIBUTE((constructor)) void _________() {
 
 # define PRINT(fmt, args...)     emit(snprintf(_ba_buf, sizeof(_ba_buf), fmt, args))
 #endif
+
+static INLINE size_t ba_capacity(const struct block_allocator * a) {
+    return (size_t)a->num_pages * a->l.blocks;
+}
 
 static INLINE int ba_empty(struct ba_page_header * h) {
     return !(h->first);
@@ -597,10 +603,19 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 
 EXPORT void ba_local_grow(struct ba_local * a, uint32_t blocks);
 EXPORT void ba_local_get_page(struct ba_local * a);
+EXPORT size_t ba_lcount(const struct ba_local * a);
 EXPORT void ba_ldestroy(struct ba_local * a);
 EXPORT void ba_lfree_all(struct ba_local * a);
 EXPORT void ba_walk_local(struct ba_local * a,
 			  void (*callback)(void*,void*,void*), void * data);
+
+static INLINE size_t ba_lcapacity(const struct ba_local * a) {
+    if (a->a) {
+	return ba_capacity(a->a);
+    } else {
+	return (size_t)(a->page && a->l.blocks);
+    }
+}
 
 /*
  * Guarentee that for a minimum of n allocations no relocation will be

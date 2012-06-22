@@ -234,18 +234,22 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
     memset(a->pages, 0, a->allocated * sizeof(ba_p));
 }
 
-EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) {
-    size_t n = 0;
-
+EXPORT void ba_count_all(const struct block_allocator * a, size_t *num,
+			 size_t *size) {
     /* fprintf(stderr, "page_size: %u, pages: %u\n", BA_PAGESIZE(a->l), a->num_pages); */
     *size = BA_BYTES(a) + a->num_pages * BA_PAGESIZE(a->l);
-    if (a->alloc)
-	a->alloc->h = a->h;
+    *num = ba_count(a);
+}
+
+EXPORT size_t ba_count(const struct block_allocator * a) {
+    size_t n = 0;
+
+    if (a->alloc) a->alloc->h = a->h;
+
     PAGE_LOOP(a, {
 	n += p->h.used;
     });
-
-    *num = n;
+    return n;
 }
 
 EXPORT void ba_destroy(struct block_allocator * a) {
@@ -712,6 +716,12 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 /*
  * Here come local allocator definitions
  */
+
+EXPORT size_t ba_lcount(const struct ba_local * a) {
+    if (a->a) return ba_count(a->a);
+    else return (size_t)(a->page && a->h.used);
+}
+
 EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 			  uint32_t blocks, uint32_t max_blocks,
 			  void (*simple)(void *, void*, ptrdiff_t),
