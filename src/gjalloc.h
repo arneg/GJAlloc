@@ -70,16 +70,6 @@ extern "C" {
 #define IF_DEBUG(x)
 #endif
 
-#ifndef MEM_RW_RANGE
-# define MEM_RW_RANGE(x, y)
-#endif
-#ifndef MEM_RW
-# define MEM_RW(x)
-#endif
-#ifndef MEM_WO
-# define MEM_WO(x)
-#endif
-
 #ifndef EXPORT
 # define EXPORT
 #endif
