@@ -45,6 +45,8 @@ int main() {
     ba_lfree(&a, list[2]);
     ba_walk_local(&a, callback, NULL);
 
+    ba_ldestroy(&a);
+    free(list);
 
     return 0;
 }
