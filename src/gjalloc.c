@@ -250,13 +250,11 @@ EXPORT void ba_count_all(struct block_allocator * a, size_t *num, size_t *size) 
 
 EXPORT void ba_destroy(struct block_allocator * a) {
     PAGE_LOOP(a, {
-	MEM_RW_RANGE(p, BA_PAGESIZE(a->l));
 	free(p);
     });
 
     a->h.first = NULL;
     a->alloc = NULL;
-    MEM_RW_RANGE(a->pages, BA_BYTES(a));
     free(a->pages);
     a->last_free = NULL;
     a->allocated = 0;
@@ -688,7 +686,6 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 #endif
 
     ba_htable_delete(a, p);
-    MEM_RW_RANGE(*p, BA_PAGESIZE(a->l));
 
     /* we know that p == a->last_free */
     a->last_free = NULL;
