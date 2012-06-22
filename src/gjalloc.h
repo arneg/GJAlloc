@@ -486,7 +486,7 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 
 ATTRIBUTE((always_inline))
 static INLINE void ba_free(struct block_allocator * a, void * ptr) {
-    ba_p p;
+    struct ba_page * p;
 
 #ifdef BA_MEMTRACE
     PRINT("%% %p\n", ptr);
@@ -510,14 +510,12 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	return;
     }
 
-
-    if (BA_CHECK_PTR(a->l, a->last_free, ptr)) {
-	p = a->last_free;
-	INC(free_fast2);
-    } else {
+    if (!BA_CHECK_PTR(a->l, a->last_free, ptr)) {
 	ba_find_page(a, ptr);
-	p = a->last_free;
     }
+
+    p = a->last_free;
+
     ba_unshift(&p->h, (struct ba_block_header*)ptr);
 #ifdef BA_USE_VALGRIND
     VALGRIND_MEMPOOL_FREE(a, ptr);
@@ -587,6 +585,7 @@ struct ba_relocation {
     BA_INIT_LAYOUT(block_size, blocks),\
     BA_INIT_HEADER(),\
     /**/NULL,\
+    /**/NULL,\
     /**/max_blocks,\
     /**/NULL,\
     { NULL, NULL }\
@@ -595,7 +594,7 @@ struct ba_relocation {
 struct ba_local {
     struct ba_layout l;
     struct ba_page_header h;
-    ba_p page;
+    ba_p page, last_free;
     uint32_t max_blocks;
     struct block_allocator * a;
     struct ba_relocation rel;
@@ -652,11 +651,29 @@ static INLINE void * ba_lalloc(struct ba_local * a) {
 }
 
 static INLINE void ba_lfree(struct ba_local * a, void * ptr) {
+    struct ba_page * p;
     if (!a->a || BA_CHECK_PTR(a->l, a->page, ptr)) {
 	ba_unshift(&a->h, (struct ba_block_header *)ptr);
-    } else {
-	ba_free(a->a, ptr);
+#ifdef BA_USE_VALGRIND
+	VALGRIND_MEMPOOL_FREE(a, ptr);
+#endif
+	return;
     }
+
+    if (!BA_CHECK_PTR(a->l, a->last_free, ptr)) {
+	ba_find_page(a->a, ptr);
+	a->last_free = a->a->last_free;
+    }
+
+    p = a->last_free;
+
+    ba_unshift(&p->h, (struct ba_block_header *)ptr);
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MEMPOOL_FREE(a, ptr);
+#endif
+
+    if (!(p->h.used) || !(((ba_b)ptr)->next))
+	ba_low_free(a->a, p, (ba_b)ptr);
 }
 
 /*
