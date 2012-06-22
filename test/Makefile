@@ -2,8 +2,12 @@
 
 LD_FLAGS=-lrt
 
-CC=gcc -g -Wall -O0 -msse $(X) $(LD_FLAGS)
-CXX=g++ -g -Wall -O3 -msse $(X) $(LD_FLAGS)
+FLAGS=-g -Wall -O0 -DBA_USE_VALGRIND
+CFLAGS=$(FLAGS)
+CXXFLAGS=$(FLAGS)
+
+CC=gcc $(CFLAGS) $(X) $(LD_FLAGS)
+CXX=g++ $(CXXFLAGS) $(X) $(LD_FLAGS)
 
 all: c/test_walk
 
