@@ -772,6 +772,10 @@ static INLINE struct ba_page * ba_local_grow_page(struct ba_page * p,
     h->first = stop;
     h->first->next = BA_ONE;
 
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MAKE_MEM_NOACCESS(stop, l->block_size*(l->blocks - h->used));
+#endif
+
     return n;
 }
 
