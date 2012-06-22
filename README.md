@@ -12,9 +12,9 @@
   [wiki](https://github.com/arneg/GJAlloc/wiki/Performance-comparison). Good
   luck!
 
-  When debugging it is advised to compile with `BA_DEBUG` which will detect
-  double frees and many cases of bad memory access in blocks that have been
-  freed.
+  When debugging your application it is advised to compile with `BA_USE_VALGRIND`
+  defined, which will enable memcheck support for blocks allocated with the block
+  allocator.
 
   GJAlloc was initially developed for use in [pike](http://pike.lysator.liu.se).
 
