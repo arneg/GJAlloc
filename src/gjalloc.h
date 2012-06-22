@@ -14,6 +14,11 @@ extern "C" {
 # endif
 #endif
 
+#ifdef BA_USE_VALGRIND
+# include <valgrind/valgrind.h>
+# include <valgrind/memcheck.h>
+#endif
+
 #define CONCAT(X, Y)	X##Y
 #define XCONCAT(X, Y)	CONCAT(X, Y)
 
@@ -55,8 +60,6 @@ extern "C" {
 #define likely(x)	(x)
 #define unlikely(x)	(x)
 #endif
-#define BA_MARK_FREE	0xF4337575
-#define BA_MARK_ALLOC	0x4110C375
 #define BA_ALLOC_INITIAL	8
 /*#define BA_HASH_THLD		8 */
 #define BA_MAX_EMPTY		8
@@ -207,9 +210,6 @@ static INLINE void bv_print(struct bitvector * bv) {
 
 struct ba_block_header {
     struct ba_block_header * next;
-#ifdef BA_DEBUG
-    uint32_t magic;
-#endif
 };
 
 #define BA_ONE	((struct ba_block_header *)1)
@@ -321,7 +321,7 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 			 uint32_t blocks);
 EXPORT void ba_low_alloc(struct block_allocator * a);
 EXPORT void ba_find_page(struct block_allocator * a,
-			      const void * ptr);
+			 const void * ptr);
 EXPORT void ba_remove_page(struct block_allocator * a);
 #ifdef BA_DEBUG
 EXPORT void ba_print_htable(const struct block_allocator * a);
@@ -370,18 +370,6 @@ static ATTRIBUTE((constructor)) void _________() {
 # define PRINT(fmt, args...)     emit(snprintf(_ba_buf, sizeof(_ba_buf), fmt, args))
 #endif
 
-#ifdef BA_DEBUG
-# define BA_MARK_FREED(ptr)  do {		    \
-    ((ba_b)ptr)->magic = BA_MARK_FREE;		    \
-} while(0)
-# define BA_MARK_ALLOCED(ptr)  do {		    \
-    ((ba_b)ptr)->magic = BA_MARK_ALLOC;		    \
-} while(0)
-#else
-# define BA_MARK_FREED(ptr)
-# define BA_MARK_ALLOCED(ptr)
-#endif
-
 static INLINE int ba_empty(struct ba_page_header * h) {
     return !(h->first);
 }
@@ -396,13 +384,23 @@ static INLINE void ba_unshift(struct ba_page_header * h,
 
 ATTRIBUTE((malloc))
 static INLINE struct ba_block_header * ba_shift(struct ba_page_header * h,
-						struct ba_page * p,
+						const struct ba_page * p,
 						const struct ba_layout * l) {
     struct ba_block_header * ptr = h->first;
 
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MAKE_MEM_DEFINED(ptr, sizeof(void*));
+#endif
+
     if (ptr->next == BA_ONE) {
 	h->first = (ba_b)(((char*)ptr) + l->block_size);
+#ifdef BA_USE_VALGRIND
+	VALGRIND_MAKE_MEM_DEFINED(h->first, sizeof(void*));
+#endif
 	h->first->next = (ba_b)(size_t)!(h->first == BA_LASTBLOCK(*l, p));
+#ifdef BA_USE_VALGRIND
+	VALGRIND_MAKE_MEM_NOACCESS(h->first, sizeof(void*));
+#endif
 	h->flags |= BA_FLAG_SORTED;
     } else
 	h->first = ptr->next;
@@ -457,9 +455,12 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 	ba_check_allocator(a, "after ba_low_alloc", __FILE__, __LINE__);
 #endif
     }
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MEMPOOL_ALLOC(a, a->h.first, a->l.block_size);
+#endif
+
     ptr = ba_shift(&a->h, a->alloc, &a->l);
 
-    BA_MARK_ALLOCED(ptr);
 #ifdef BA_MEMTRACE
     PRINT("%% %p 0x%x\n", ptr, a->l.block_size);
 #endif
@@ -473,6 +474,10 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 #endif
 #ifdef BA_DEBUG
 	ba_check_allocator(a, "after ba_alloc", __FILE__, __LINE__);
+#endif
+
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MAKE_MEM_UNDEFINED(ptr, a->l.block_size);
 #endif
     
     return ptr;
@@ -491,11 +496,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     if (a->empty_pages == a->num_pages) {
 	BA_ERROR("we did it!\n");
     }
-    if (((ba_b)ptr)->magic == BA_MARK_FREE) {
-	BA_ERROR("double freed somethign\n");
-    }
 #endif
-    BA_MARK_FREED(ptr);
 
 #ifdef BA_STATS
     a->stats.st_used--;
@@ -503,6 +504,9 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     if (likely(BA_CHECK_PTR(a->l, a->alloc, ptr))) {
 	INC(free_fast1);
 	ba_unshift(&a->h, (struct ba_block_header*)ptr);
+#ifdef BA_USE_VALGRIND
+	VALGRIND_MEMPOOL_FREE(a, ptr);
+#endif
 	return;
     }
 
@@ -515,6 +519,10 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	p = a->last_free;
     }
     ba_unshift(&p->h, (struct ba_block_header*)ptr);
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MEMPOOL_FREE(a, ptr);
+#endif
+
     if ((p->h.used) && (((ba_b)ptr)->next)) {
 	INC(free_fast2);
 	return;
@@ -630,22 +638,21 @@ static INLINE void * ba_lalloc(struct ba_local * a) {
 
     if (ba_empty(&a->h))
 	ba_local_get_page(a);
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MEMPOOL_ALLOC(a, a->h.first, a->l.block_size);
+#endif
 
     ptr = ba_shift(&a->h, a->page, &a->l);
 
-    BA_MARK_ALLOCED(ptr);
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MAKE_MEM_UNDEFINED(ptr, a->l.block_size);
+#endif
 
     return ptr;
 }
 
 static INLINE void ba_lfree(struct ba_local * a, void * ptr) {
     if (!a->a || BA_CHECK_PTR(a->l, a->page, ptr)) {
-#if BA_DEBUG
-	if (((ba_b)ptr)->magic == BA_MARK_FREE) {
-	    ba_error("double free");
-	}
-#endif
-	BA_MARK_FREED(ptr);
 	ba_unshift(&a->h, (struct ba_block_header *)ptr);
     } else {
 	ba_free(a->a, ptr);

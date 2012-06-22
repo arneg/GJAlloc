@@ -1,6 +1,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#if 0
+} /* vim indenting workaround */
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -11,7 +14,6 @@ extern "C" {
 #endif
 
 #include "gjalloc.h"
-
 
 #ifdef BA_NEED_ERRBUF
 EXPORT char errbuf[128];
@@ -185,6 +187,9 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 #ifdef BA_STATS
     memset(&a->stats, 0, sizeof(struct ba_stats));
 #endif
+#ifdef BA_USE_VALGRIND
+    VALGRIND_CREATE_MEMPOOL(a, 0, 0);
+#endif
 
 #ifdef BA_DEBUG
     fprintf(stderr, " -> blocks: %u block_size: %u page_size: %u mallocing size: %u, next pages: %u magnitude: %u\n",
@@ -207,13 +212,15 @@ static INLINE void ba_free_page(const struct ba_layout * l,
 	BA_CMEMSET((char*)(p+1), bp, l->block_size, l->blocks);
 
     p->h.first->next = BA_ONE;
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MAKE_MEM_NOACCESS(p+1, l->block_size * l->blocks);
+#endif
 }
 
 EXPORT INLINE void ba_free_all(struct block_allocator * a) {
     if (!a->allocated) return;
 
     PAGE_LOOP(a, {
-	MEM_RW_RANGE(p, BA_PAGESIZE(a->l));
 	free(p);
     });
 
@@ -259,6 +266,9 @@ EXPORT void ba_destroy(struct block_allocator * a) {
     a->num_pages = 0;
 #ifdef BA_STATS
     a->stats.st_max = a->stats.st_used = 0;
+#endif
+#ifdef BA_USE_VALGRIND
+    VALGRIND_DESTROY_MEMPOOL(a);
 #endif
 }
 
@@ -533,13 +543,6 @@ static INLINE ba_p ba_alloc_page(struct block_allocator * a) {
     p->next = p->prev = NULL;
     ba_htable_insert(a, p);
 #ifdef BA_DEBUG
-    ba_check_allocator(a, "ba_alloc after insert", __FILE__, __LINE__);
-#endif
-#ifdef BA_DEBUG
-    MEM_RW(BA_LASTBLOCK(a->l, p)->magic);
-    BA_LASTBLOCK(a->l, p)->magic = BA_MARK_FREE;
-    MEM_RW(BA_BLOCKN(a->l, p, 0)->magic);
-    BA_BLOCKN(a->l, p, 0)->magic = BA_MARK_ALLOC;
     ba_check_allocator(a, "ba_alloc after insert.", __FILE__, __LINE__);
 #endif
 
@@ -739,6 +742,9 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
     a->a = NULL;
     a->rel.simple = simple;
     a->rel.relocate = relocate;
+#ifdef BA_USE_VALGRIND
+    VALGRIND_CREATE_MEMPOOL(a, 0, 0);
+#endif
 }
 
 static INLINE struct ba_page * ba_local_grow_page(struct ba_page * p,
@@ -751,6 +757,13 @@ static INLINE struct ba_page * ba_local_grow_page(struct ba_page * p,
     struct ba_page * n;
 
     n = (ba_p)BA_XREALLOC(p, BA_PAGESIZE(*l));
+#ifdef BA_USE_VALGRIND
+    /* l is in principle different from the allocator, however
+     * as long as we keep it as the first item in the struct,
+     * its fine to use it
+     */
+    VALGRIND_MEMPOOL_CHANGE(l, p, n, BA_PAGESIZE(*l));
+#endif
     stop = BA_BLOCKN(*l, n, h->used);
     diff = (char*)n - (char*)p;
     if (diff) {
@@ -826,6 +839,9 @@ EXPORT void ba_ldestroy(struct ba_local * a) {
     }
     a->page = NULL;
     a->h.first = NULL;
+#ifdef BA_USE_VALGRIND
+    VALGRIND_DESTROY_MEMPOOL(a);
+#endif
 }
 
 EXPORT void ba_lfree_all(struct ba_local * a) {
@@ -838,6 +854,33 @@ EXPORT void ba_lfree_all(struct ba_local * a) {
     }
 }
 
+static INLINE void ba_list_defined(const struct ba_page * p,
+				   const struct ba_block_header * b,
+				   const struct ba_layout * l) {
+#ifdef BA_USE_VALGRIND
+    struct ba_page_header h;
+    h.first = (struct ba_block_header *)b;
+    while (h.first) {
+	VALGRIND_MAKE_MEM_DEFINED(h.first, sizeof(void*));
+	ba_shift(&h, p, l);
+    }
+#endif
+}
+
+static INLINE void ba_list_noaccess(const struct ba_page * p,
+				    const struct ba_block_header * b,
+				    const struct ba_layout * l) {
+#ifdef BA_USE_VALGRIND
+    struct ba_page_header h;
+    h.first = (struct ba_block_header *)b;
+    while (h.first) {
+	b = h.first;
+	ba_shift(&h, p, l);
+	VALGRIND_MAKE_MEM_NOACCESS(b, sizeof(void*));
+    }
+#endif
+}
+
 void ba_walk_page(const struct ba_layout * l,
 		  struct ba_page * p,
 		  void (*callback)(void*,void*,void*),
@@ -845,11 +888,19 @@ void ba_walk_page(const struct ba_layout * l,
     const struct ba_block_header * b;
     char * start;
 
+#define BA_CALLBACK(a, b, c)	do {	\
+    ba_list_noaccess(p, b, l);		\
+    callback(a, b, c);			\
+    ba_list_defined(p, b, l);		\
+} while (0)
+
     if (!(p->h.flags & BA_FLAG_SORTED)) {
 	p->h.first = ba_sort_list(p, p->h.first, l);
 	p->h.flags |= BA_FLAG_SORTED;
     }
     b = p->h.first;
+
+    ba_list_defined(p, b, l);
 
     if (!b) {
 	/* page is full, walk all blocks */
@@ -858,8 +909,13 @@ void ba_walk_page(const struct ba_layout * l,
     }
 
     if (b != BA_BLOCKN(*l, p, 0)) {
-	callback(BA_BLOCKN(*l, p, 0), (void*)b, data);
+	BA_CALLBACK(BA_BLOCKN(*l, p, 0), (void*)b, data);
     }
+
+    /*
+     * TODO:
+     *
+     */
 
     do {
 	struct ba_block_header * n = b->next;
@@ -867,15 +923,18 @@ void ba_walk_page(const struct ba_layout * l,
 	if (n == BA_ONE) return;
 	if (!n) break;
 	if ((char*)n > start) {
-	    callback(start, (char*)n, data);
+	    BA_CALLBACK(start, n, data);
 	}
 	b = n;
     } while (b);
 
     if (start <= (char*)BA_LASTBLOCK(*l, p)) {
 walk_rest:
-	callback(start, (char*)BA_LASTBLOCK(*l, p) + l->block_size, data);
+	BA_CALLBACK(start, BA_LASTBLOCK(*l, p) + l->block_size, data);
     }
+
+    ba_list_noaccess(p, b, l);
+
 }
 
 EXPORT void ba_walk(struct block_allocator * a,
@@ -913,6 +972,8 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
     struct bitvector v;
     size_t i, j;
     struct ba_block_header ** t = &b;
+
+    ba_list_defined(p, b, l);
 
 #ifdef BA_DEBUG
     fprintf(stderr, "sorting max %llu blocks\n",
@@ -973,12 +1034,15 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
     /*
      * The last one
      */
+
     if (v.length < l->blocks) {
 	*t = BA_BLOCKN(*l, p, v.length);
-	BA_BLOCKN(*l, p, v.length)->next = BA_ONE;
+	(*t)->next = BA_ONE;
     } else (*t)->next = NULL;
 
     free(v.v);
+
+    ba_list_noaccess(p, b, l);
 
     return b;
 }
