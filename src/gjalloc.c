@@ -604,6 +604,10 @@ EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
 	p->h.first->next = BA_ONE;
 	SINGLE_LINK(a->empty, p);
 	a->empty_pages ++;
+	/*
+	 * This comparison looks strange, however the first page never gets
+	 * freed, so this is actually ok.
+	 */
 	if (a->empty_pages >= a->max_empty_pages) {
 	    ba_remove_page(a);
 	    return;
