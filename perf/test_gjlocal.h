@@ -8,7 +8,7 @@ void simple_reloc(void * ptr, void * stop, ptrdiff_t diff) {
 
     fprintf(stderr, "relocating from %p to %p\n", ptr, stop);
     while (f < (struct foobar *)stop) {
-	*(f->ptr) += diff;
+	ba_simple_rel_pointer(f->ptr, diff);
     }
 }
 #define TEST_INIT(t)	static struct ba_local allocator;
