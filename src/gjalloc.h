@@ -597,9 +597,9 @@ struct ba_local {
     struct ba_layout l;
     struct ba_page_header h;
     ba_p page, last_free;
-    uint32_t max_blocks;
     struct block_allocator * a;
     struct ba_relocation rel;
+    uint32_t max_blocks;
 };
 
 EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
