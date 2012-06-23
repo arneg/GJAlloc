@@ -1050,7 +1050,6 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
      * We now rechain all blocks.
      */
     while ((i = bv_ctz(&v, j)) != (size_t)-1) {
-	if (i < j) return b;
 	*t = BA_BLOCKN(*l, p, i);
 	t = &((*t)->next);
 	j = i+1;
@@ -1063,7 +1062,7 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
     if (v.length < l->blocks) {
 	*t = BA_BLOCKN(*l, p, v.length);
 	(*t)->next = BA_ONE;
-    } else (*t)->next = NULL;
+    } else *t = NULL;
 
     free(v.v);
 
