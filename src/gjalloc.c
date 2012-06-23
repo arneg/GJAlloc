@@ -594,6 +594,10 @@ EXPORT void ba_low_alloc(struct block_allocator * a) {
 }
 
 EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MEMPOOL_FREE(a, ptr);
+    VALGRIND_MAKE_MEM_NOACCESS(ptr, a->l.block_size);
+#endif
     if (!p->h.used) {
 	INC(free_empty);
 	DOUBLE_UNLINK(a->first, p);
@@ -601,7 +605,13 @@ EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
 	 * happen when reusing pages. Since that is cheap here, we do it.
 	 */
 	p->h.first = BA_BLOCKN(a->l, p, 0);
+#ifdef BA_USE_VALGRIND
+	VALGRIND_MAKE_MEM_DEFINED(a->h.first, sizeof(void*));
+#endif
 	p->h.first->next = BA_ONE;
+#ifdef BA_USE_VALGRIND
+	VALGRIND_MAKE_MEM_NOACCESS(a->h.first, sizeof(void*));
+#endif
 	SINGLE_LINK(a->empty, p);
 	a->empty_pages ++;
 	/*

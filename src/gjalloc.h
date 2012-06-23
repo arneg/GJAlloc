@@ -501,6 +501,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	INC(free_fast1);
 	ba_unshift(&a->h, (struct ba_block_header*)ptr);
 #ifdef BA_USE_VALGRIND
+	VALGRIND_MAKE_MEM_NOACCESS(ptr, a->l.block_size);
 	VALGRIND_MEMPOOL_FREE(a, ptr);
 #endif
 	return;
@@ -513,12 +514,12 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     p = a->last_free;
 
     ba_unshift(&p->h, (struct ba_block_header*)ptr);
-#ifdef BA_USE_VALGRIND
-    VALGRIND_MEMPOOL_FREE(a, ptr);
-#endif
 
     if ((p->h.used) && (((ba_b)ptr)->next)) {
 	INC(free_fast2);
+#ifdef BA_USE_VALGRIND
+	VALGRIND_MEMPOOL_FREE(a, ptr);
+#endif
 	return;
     }
 
@@ -567,6 +568,11 @@ struct ba_relocation {
     void (*simple)(void*, void*, ptrdiff_t);
     void (*relocate)(void*, void*, size_t);
 };
+
+static INLINE void ba_simple_rel_pointer(void ** ptr, ptrdiff_t diff) {
+    char ** _ptr = (char**)ptr;
+    if (*_ptr) *_ptr += diff;
+}
 
 /*
  * =============================================
