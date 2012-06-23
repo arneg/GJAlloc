@@ -801,34 +801,62 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 #endif
 }
 
-static INLINE struct ba_page * ba_local_grow_page(struct ba_page * p,
+static struct ba_page * ba_local_grow_page(struct ba_page * p,
 					   struct ba_page_header * h,
 					   const struct ba_layout * l,
+					   const struct ba_layout * ol,
 					   const struct ba_relocation * rel) {
 
-    struct ba_block_header * stop;
+    struct ba_block_header ** t;
     ptrdiff_t diff;
     struct ba_page * n;
 
     n = (ba_p)BA_XREALLOC(p, BA_PAGESIZE(*l));
-#ifdef BA_USE_VALGRIND
-    /* l is in principle different from the allocator, however
-     * as long as we keep it as the first item in the struct,
-     * its fine to use it
-     */
-    VALGRIND_MEMPOOL_CHANGE(l, p, n, BA_PAGESIZE(*l));
-#endif
-    stop = BA_BLOCKN(*l, n, h->used);
-    diff = (char*)n - (char*)p;
-    if (diff) {
-	rel->simple(BA_BLOCKN(*l, n, 0), stop, diff);
+
+    if (!p) {
+	ba_free_page(l, n, NULL);
+	*h = n->h;
+	return n;
     }
-    h->first = stop;
-    h->first->next = BA_ONE;
+
+    diff = (char*)n - (char*)p;
+
+    if (diff) {
+	t = &h->first;
+	/*
+	 * relocate all free list pointers and append new blocks at the end
+	 */
+	while (*t > BA_ONE) {
+	    ba_simple_rel_pointer(t, diff);
+	    t = &((*t)->next);
+	}
+	if (*t == NULL) {
+	    *t = (struct ba_block_header*)((char*)n + BA_PAGESIZE(*ol));
+	    (*t)->next = BA_ONE;
+	}
+
+	BA_WALK_CHUNKS(n, h, l, {
+#ifdef BA_USE_VALGRIND
+	    char * temp = _start;
+	    /* protect free list during relocation.  */
+	    ba_list_noaccess(n, h->first, l);
+#endif
+	    rel->simple(_start, _stop, diff);
+#ifdef BA_USE_VALGRIND
+	    ba_list_defined(n, h->first, l);
+#endif
 
 #ifdef BA_USE_VALGRIND
-    VALGRIND_MAKE_MEM_NOACCESS(stop, l->block_size*(l->blocks - h->used));
+	    /* ol is in principle different from the allocator, however
+	     * as long as we keep it as the first item in the struct,
+	     * its fine to use it */
+	    while (temp < _stop) {
+		VALGRIND_MEMPOOL_CHANGE(ol, temp-diff, temp, l->block_size);
+		temp += l->block_size;
+	    }
 #endif
+	});
+    }
 
     return n;
 }
@@ -846,7 +874,7 @@ EXPORT INLINE void ba_local_grow(struct ba_local * a,
 	ba_init_layout(&l, a->l.block_size, blocks);
     }
 
-    a->page = ba_local_grow_page(a->page, &a->h, &l, &a->rel);
+    a->page = ba_local_grow_page(a->page, &a->h, &l, &a->l, &a->rel);
     a->l = l;
 
     if (transform) {
