@@ -846,8 +846,9 @@ static struct ba_page * ba_local_grow_page(struct ba_page * p,
 
     diff = (char*)n - (char*)p;
 
+    t = &h->first;
+
     if (diff) {
-	t = &h->first;
 	/*
 	 * relocate all free list pointers and append new blocks at the end
 	 */
@@ -881,6 +882,14 @@ static struct ba_page * ba_local_grow_page(struct ba_page * p,
 	    }
 #endif
 	});
+    } else {
+	while (*t > BA_ONE) {
+	    t = &((*t)->next);
+	}
+	if (*t == NULL) {
+	    *t = (struct ba_block_header*)((char*)n + BA_PAGESIZE(*ol));
+	    (*t)->next = BA_ONE;
+	}
     }
 
     return n;
