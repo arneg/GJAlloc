@@ -200,6 +200,37 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 #endif
 }
 
+#define BA_WALK_CHUNKS3(p, h, l, label, C...)  do {			\
+    struct ba_page_header * _h = (h);					\
+    const struct ba_layout * _l = (l);					\
+    char * _start, * _stop;						\
+    if (!(_h->flags & BA_FLAG_SORTED)) {				\
+	_h->first = ba_sort_list(p, _h->first, _l);			\
+	_h->first = ba_sort_list(p, _h->first, _l);			\
+	_h->flags |= BA_FLAG_SORTED;					\
+    }									\
+    ba_list_defined(p, _h->first, _l);					\
+    _start = (char*)BA_BLOCKN(*_l, (p), 0);				\
+    if (!_h->first) {							\
+	_stop = (char*)BA_LASTBLOCK(*_l, p) + _l->block_size;		\
+    } else _stop = (char*)_h->first;					\
+									\
+    do {								\
+	struct ba_block_header * _b;					\
+	if (_start < _stop) C						\
+	if (!BA_CHECK_PTR(*_l, (p), _stop)) break;			\
+	_b = ((struct ba_block_header*)_stop)->next;		    	\
+	_start = _stop + _l->block_size;				\
+	if (_b == BA_ONE) break;					\
+	if (!_b) _stop = (char*)BA_LASTBLOCK(*_l, p) + _l->block_size;	\
+	else _stop = (char*)_b;						\
+    } while (1);							\
+    ba_list_noaccess(p, _h->first, _l);					\
+} while (0)
+#define BA_WALK_CHUNKS2(p, h, l, label, C...)  BA_WALK_CHUNKS3(p, h, l, label, C)
+#define BA_WALK_CHUNKS(p, h, l, C...) BA_WALK_CHUNKS2(p, h, l, XCONCAT(chunk_loop_label, __LINE__), C)
+
+
 static INLINE void ba_free_page(const struct ba_layout * l,
 				struct ba_page * p,
 				const void * blueprint) {
