@@ -569,7 +569,7 @@ struct ba_relocation {
     void (*relocate)(void*, void*, size_t);
 };
 
-static INLINE void ba_simple_rel_pointer(void ** ptr, ptrdiff_t diff) {
+static INLINE void ba_simple_rel_pointer(void * ptr, ptrdiff_t diff) {
     char ** _ptr = (char**)ptr;
     if (*_ptr) *_ptr += diff;
 }
