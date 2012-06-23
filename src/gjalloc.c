@@ -206,7 +206,6 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
     char * _start, * _stop;						\
     if (!(_h->flags & BA_FLAG_SORTED)) {				\
 	_h->first = ba_sort_list(p, _h->first, _l);			\
-	_h->first = ba_sort_list(p, _h->first, _l);			\
 	_h->flags |= BA_FLAG_SORTED;					\
     }									\
     ba_list_defined(p, _h->first, _l);					\
@@ -230,6 +229,32 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 #define BA_WALK_CHUNKS2(p, h, l, label, C...)  BA_WALK_CHUNKS3(p, h, l, label, C)
 #define BA_WALK_CHUNKS(p, h, l, C...) BA_WALK_CHUNKS2(p, h, l, XCONCAT(chunk_loop_label, __LINE__), C)
 
+static INLINE void ba_list_defined(const struct ba_page * p,
+				   const struct ba_block_header * b,
+				   const struct ba_layout * l) {
+#ifdef BA_USE_VALGRIND
+    struct ba_page_header h;
+    h.first = (struct ba_block_header *)b;
+    while (h.first) {
+	VALGRIND_MAKE_MEM_DEFINED(h.first, sizeof(void*));
+	ba_shift(&h, p, l);
+    }
+#endif
+}
+
+static INLINE void ba_list_noaccess(const struct ba_page * p,
+				    const struct ba_block_header * b,
+				    const struct ba_layout * l) {
+#ifdef BA_USE_VALGRIND
+    struct ba_page_header h;
+    h.first = (struct ba_block_header *)b;
+    while (h.first) {
+	b = h.first;
+	ba_shift(&h, p, l);
+	VALGRIND_MAKE_MEM_NOACCESS(b, sizeof(void*));
+    }
+#endif
+}
 
 static INLINE void ba_free_page(const struct ba_layout * l,
 				struct ba_page * p,
@@ -940,87 +965,21 @@ EXPORT void ba_lfree_all(struct ba_local * a) {
     }
 }
 
-static INLINE void ba_list_defined(const struct ba_page * p,
-				   const struct ba_block_header * b,
-				   const struct ba_layout * l) {
-#ifdef BA_USE_VALGRIND
-    struct ba_page_header h;
-    h.first = (struct ba_block_header *)b;
-    while (h.first) {
-	VALGRIND_MAKE_MEM_DEFINED(h.first, sizeof(void*));
-	ba_shift(&h, p, l);
-    }
-#endif
-}
-
-static INLINE void ba_list_noaccess(const struct ba_page * p,
-				    const struct ba_block_header * b,
-				    const struct ba_layout * l) {
-#ifdef BA_USE_VALGRIND
-    struct ba_page_header h;
-    h.first = (struct ba_block_header *)b;
-    while (h.first) {
-	b = h.first;
-	ba_shift(&h, p, l);
-	VALGRIND_MAKE_MEM_NOACCESS(b, sizeof(void*));
-    }
-#endif
-}
-
 void ba_walk_page(const struct ba_layout * l,
 		  struct ba_page * p,
 		  void (*callback)(void*,void*,void*),
 		  void * data) {
-    const struct ba_block_header * b;
-    char * start;
 
 #define BA_CALLBACK(a, b, c)	do {	\
-    ba_list_noaccess(p, b, l);		\
+    ba_list_noaccess(p, p->h.first, l);	\
     callback(a, b, c);			\
-    ba_list_defined(p, b, l);		\
+    ba_list_defined(p, p->h.first, l);	\
 } while (0)
 
-    if (!(p->h.flags & BA_FLAG_SORTED)) {
-	p->h.first = ba_sort_list(p, p->h.first, l);
-	p->h.flags |= BA_FLAG_SORTED;
-    }
-    b = p->h.first;
-
-    ba_list_defined(p, b, l);
-
-    if (!b) {
-	/* page is full, walk all blocks */
-	start = (char*)BA_BLOCKN(*l, p, 0);
-	goto walk_rest;
-    }
-
-    if (b != BA_BLOCKN(*l, p, 0)) {
-	BA_CALLBACK(BA_BLOCKN(*l, p, 0), (void*)b, data);
-    }
-
-    /*
-     * TODO:
-     *
-     */
-
-    do {
-	struct ba_block_header * n = b->next;
-	start = (char*)b + l->block_size;
-	if (n == BA_ONE) return;
-	if (!n) break;
-	if ((char*)n > start) {
-	    BA_CALLBACK(start, n, data);
-	}
-	b = n;
-    } while (b);
-
-    if (start <= (char*)BA_LASTBLOCK(*l, p)) {
-walk_rest:
-	BA_CALLBACK(start, BA_LASTBLOCK(*l, p) + l->block_size, data);
-    }
-
-    ba_list_noaccess(p, b, l);
-
+    BA_WALK_CHUNKS(p, &p->h, l, {
+	BA_CALLBACK(_start, _stop, data);
+    });
+#undef BA_CALLBACK
 }
 
 EXPORT void ba_walk(struct block_allocator * a,
