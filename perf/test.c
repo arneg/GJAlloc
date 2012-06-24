@@ -7,8 +7,15 @@
 # include <malloc.h>
 #endif
 
+#ifdef BA_DEBUG
+/* more usable with memcheck and ba_check_allocator and probably big enoug
+ * to catch bugs */
+#define M 40000
+#define N 40000
+#else
 #define M 14000000
 #define N 14000000
+#endif
 #define SIZE	32
 
 struct foo {
