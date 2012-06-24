@@ -14,6 +14,12 @@ extern "C" {
 # endif
 #endif
 
+#ifdef BA_DEBUG
+# ifndef BA_USE_VALGRIND
+#  define BA_USE_VALGRIND
+# endif
+#endif
+
 #ifdef BA_USE_VALGRIND
 # include <valgrind/valgrind.h>
 # include <valgrind/memcheck.h>
@@ -22,12 +28,23 @@ extern "C" {
 #define CONCAT(X, Y)	X##Y
 #define XCONCAT(X, Y)	CONCAT(X, Y)
 
+#ifdef BA_DEBUG
+#define DOUBLE_LINK(head, o)	do {		\
+    if (head == o)				\
+	BA_ERROR("tryin to double_link %p to " #head " twice\n", o);	\
+    (o)->prev = NULL;				\
+    (o)->next = head;				\
+    if (head) (head)->prev = (o);		\
+    (head) = (o);				\
+} while(0)
+#else
 #define DOUBLE_LINK(head, o)	do {		\
     (o)->prev = NULL;				\
     (o)->next = head;				\
     if (head) (head)->prev = (o);		\
     (head) = (o);				\
 } while(0)
+#endif
 
 #define DOUBLE_UNLINK(head, o)	do {		\
     if ((o)->prev) (o)->prev->next = (o)->next;	\
@@ -455,6 +472,11 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 	a->alloc = ba_get_page(a, a->alloc);
 	a->h = a->alloc->h;
 #ifdef BA_DEBUG
+	if (!a->h.first) {
+	    ba_show_pages(a);
+	    BA_ERROR("a->first has no first block!\n");
+	}
+
 	ba_check_allocator(a, "after ba_get_page", __FILE__, __LINE__);
 #endif
     }
