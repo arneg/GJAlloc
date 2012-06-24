@@ -245,7 +245,8 @@ typedef struct ba_block_header * ba_b;
 
 
 #ifdef BA_STATS
-struct block_alloc_stats {
+#include <malloc.h>
+struct ba_stats {
     size_t st_max;
     size_t st_used;
     size_t st_max_pages;
@@ -282,7 +283,7 @@ struct block_allocator {
     uint32_t num_pages;
     char * blueprint;
 #ifdef BA_STATS
-    struct block_alloc_stats stats;
+    struct ba_stats stats;
 #endif
 };
 
@@ -317,6 +318,7 @@ EXPORT void ba_remove_page(struct block_allocator * a);
 EXPORT void ba_print_htable(const struct block_allocator * a);
 EXPORT void ba_check_allocator(struct block_allocator * a, char*, char*, int);
 #endif
+EXPORT void ba_print_hashstats(const struct block_allocator * a);
 #ifdef BA_STATS
 EXPORT void ba_print_stats(struct block_allocator * a);
 #endif
@@ -442,7 +444,7 @@ ATTRIBUTE((malloc))
 static INLINE void * ba_alloc(struct block_allocator * a) {
     ba_b ptr;
 #ifdef BA_STATS
-    struct block_alloc_stats *s = &a->stats;
+    struct ba_stats *s = &a->stats;
 #endif
 
     if (ba_empty(&a->h)) {

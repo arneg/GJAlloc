@@ -58,7 +58,7 @@ EXPORT void ba_show_pages(const struct block_allocator * a) {
 }
 
 #ifdef BA_STATS
-# define PRCOUNT(X)	fprintf(stat_file, #X " %5.1lf %% ", (a->stats.X/all)*100);
+# define PRCOUNT(X)	fprintf(stat_file, #X " %lg %% ", (a->stats.X/all)*100);
 static FILE * stat_file = NULL;
 ATTRIBUTE((constructor))
 static void ba_stats_init() {
@@ -75,10 +75,8 @@ static void ba_stats_deinit() {
     }
 }
 EXPORT void ba_print_stats(struct block_allocator * a) {
-    FILE *f;
-    int i;
     double all;
-    struct block_alloc_stats * s = &a->stats;
+    struct ba_stats * s = &a->stats;
     size_t used = s->st_max * a->l.block_size;
     size_t malloced = s->st_max_pages * (a->l.block_size * a->l.blocks);
     size_t overhead = s->st_max_pages * sizeof(struct ba_page);
@@ -432,6 +430,20 @@ EXPORT void ba_print_htable(const struct block_allocator * a) {
     }
 }
 #endif
+
+EXPORT void ba_print_hashstats(const struct block_allocator * a) {
+    unsigned int i;
+
+    for (i = 0; i < a->allocated; i++) {
+	unsigned int j = 0;
+	ba_p p = a->pages[i];
+	while (p) {
+	    j++;
+	    p = p->hchain;
+	}
+	fprintf(stdout, "%u\t%u\n", i, j);
+    }
+}
 
 /*
  * insert the pointer to an allocated page into the
