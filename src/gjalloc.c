@@ -766,6 +766,10 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
     ba_p p;
     ba_p * c = &(a->empty), * max = c;
 
+    /* I am not sure if this really helps. It should, by removing the
+     * page which is highest in memory, potentially help malloc lower
+     * the break.
+     */
     while (*c) {
 	if (*c > *max) {
 	    max = c;
@@ -798,8 +802,14 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 
     ba_htable_delete(a, p);
 
-    /* we know that p == a->last_free */
-    a->last_free = NULL;
+    /* we dont know that p == a->last_free. However, since
+     * we dont touch last_free, unless in DEBUG mode, we can
+     * leave it and let the next free take care of it.
+     */
+#ifdef BA_DEBUG
+    if (p == a->last_free)
+	a->last_free = NULL;
+#endif
 
 #ifdef BA_DEBUG
     memset(p, 0, sizeof(struct ba_page));
