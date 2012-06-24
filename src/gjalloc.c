@@ -20,7 +20,7 @@ EXPORT char errbuf[128];
 #endif
 
 static INLINE void ba_htable_insert(const struct block_allocator * a,
-				    ba_p ptr);
+				    struct ba_page * ptr);
 static INLINE void ba_htable_grow(struct block_allocator * a);
 
 #define BA_NBLOCK(l, p, ptr)	((uintptr_t)((char*)(ptr) - (char*)((p)+1))/(uintptr_t)((l).block_size))
@@ -28,7 +28,7 @@ static INLINE void ba_htable_grow(struct block_allocator * a);
 #define BA_PAGESIZE(l)	    ((l).offset + (l).block_size)
 #define BA_HASH_MASK(a)  (((a->allocated)) - 1)
 
-#define BA_BYTES(a)	( (sizeof(ba_p) * ((a)->allocated) ) )
+#define BA_BYTES(a)	( (sizeof(void*) * ((a)->allocated) ) )
 
 #define PRINT_NODE(a, name) do {		\
     fprintf(stderr, #name": %p\n", a->name);	\
@@ -190,8 +190,8 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 
     /* we start with management structures for BA_ALLOC_INITIAL pages */
     a->allocated = BA_ALLOC_INITIAL;
-    a->pages = (ba_p*)BA_XALLOC(BA_ALLOC_INITIAL * sizeof(ba_p));
-    memset(a->pages, 0, BA_ALLOC_INITIAL * sizeof(ba_p));
+    a->pages = (struct ba_page **)BA_XALLOC(BA_ALLOC_INITIAL * sizeof(void*));
+    memset(a->pages, 0, BA_ALLOC_INITIAL * sizeof(void*));
     a->blueprint = NULL;
 #ifdef BA_STATS
     memset(&a->stats, 0, sizeof(struct ba_stats));
@@ -296,7 +296,7 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
     a->empty = a->first = NULL;
     a->last_free = NULL;
     a->allocated = BA_ALLOC_INITIAL;
-    memset(a->pages, 0, a->allocated * sizeof(ba_p));
+    memset(a->pages, 0, a->allocated * sizeof(struct ba_page));
 }
 
 EXPORT void ba_count_all(const struct block_allocator * a, size_t *num,
@@ -382,15 +382,16 @@ static INLINE void ba_htable_grow(struct block_allocator * a) {
     uint32_t n, old;
     old = a->allocated;
     a->allocated *= 2;
-    a->pages = (ba_p*)BA_XREALLOC(a->pages, a->allocated * sizeof(ba_p));
-    memset(a->pages+old, 0, old * sizeof(ba_p));
+    a->pages = (struct ba_page **)BA_XREALLOC(a->pages,
+					      a->allocated * sizeof(void*));
+    memset(a->pages+old, 0, old * sizeof(void*));
     for (n = 0; n < old; n++) {
-	ba_p * b = a->pages + n;
+	struct ba_page ** b = a->pages + n;
 
 	while (*b) {
 	    uint32_t h = hash1(a, BA_LASTBLOCK(a->l, *b)) & BA_HASH_MASK(a);
 	    if (h != n) {
-		ba_p p = *b;
+		struct ba_page * p = *b;
 		*b = p->hchain;
 		p->hchain = a->pages[h];
 		a->pages[h] = p;
@@ -407,10 +408,10 @@ static INLINE void ba_htable_shrink(struct block_allocator * a) {
     a->allocated /= 2;
 
     for (n = 0; n < a->allocated; n++) {
-	ba_p p = a->pages[a->allocated + n];
+	struct ba_page * p = a->pages[a->allocated + n];
 
 	if (p) {
-	    ba_p t = p;
+	    struct ba_page * t = p;
 	    if (a->pages[n]) {
 		while (t->hchain) t = t->hchain;
 		t->hchain = a->pages[n];
@@ -419,7 +420,8 @@ static INLINE void ba_htable_shrink(struct block_allocator * a) {
 	}
     }
 
-    a->pages = (ba_p*)BA_XREALLOC(a->pages, a->allocated * sizeof(ba_p));
+    a->pages = (struct ba_page **)BA_XREALLOC(a->pages,
+					      a->allocated * sizeof(void*));
 }
 
 #ifdef BA_DEBUG
@@ -427,7 +429,7 @@ EXPORT void ba_print_htable(const struct block_allocator * a) {
     unsigned int i;
 
     for (i = 0; i < a->allocated; i++) {
-	ba_p p = a->pages[i];
+	struct ba_page * p = a->pages[i];
 	uint32_t hval;
 	if (!p) {
 	    fprintf(stderr, "empty %u\n", i);
@@ -447,7 +449,7 @@ EXPORT void ba_print_hashstats(const struct block_allocator * a) {
 
     for (i = 0; i < a->allocated; i++) {
 	unsigned int j = 0;
-	ba_p p = a->pages[i];
+	struct ba_page * p = a->pages[i];
 	while (p) {
 	    j++;
 	    p = p->hchain;
@@ -461,9 +463,9 @@ EXPORT void ba_print_hashstats(const struct block_allocator * a) {
  * hashtable.
  */
 static INLINE void ba_htable_insert(const struct block_allocator * a,
-				    ba_p p) {
+				    struct ba_page * p) {
     uint32_t hval = hash1(a, BA_LASTBLOCK(a->l, p));
-    ba_p * b = a->pages + (hval & BA_HASH_MASK(a));
+    struct ba_page ** b = a->pages + (hval & BA_HASH_MASK(a));
 
 
 #ifdef BA_DEBUG
@@ -516,9 +518,9 @@ static INLINE void ba_htable_replace(const struct block_allocator * a,
 #endif
 
 static INLINE void ba_htable_delete(const struct block_allocator * a,
-				    ba_p p) {
+				    struct ba_page * p) {
     uint32_t hval = hash1(a, BA_LASTBLOCK(a->l, p));
-    ba_p * b = a->pages + (hval & BA_HASH_MASK(a));
+    struct ba_page ** b = a->pages + (hval & BA_HASH_MASK(a));
 
     while (*b) {
 	if (*b == p) {
@@ -538,7 +540,7 @@ static INLINE void ba_htable_delete(const struct block_allocator * a,
 static INLINE
 struct ba_page * ba_htable_lookup(const struct block_allocator * a,
 				  const void * ptr) {
-    ba_p p;
+    struct ba_page * p;
     uint32_t h[2];
     unsigned char c, b = 0;
     h[0] = hash1(a, ptr);
@@ -565,7 +567,7 @@ EXPORT INLINE void ba_check_allocator(const struct block_allocator * a,
 				      int line) {
     uint32_t n;
     int bad = 0;
-    ba_p p;
+    struct ba_page * p;
 
     if (a->alloc)
 	a->alloc->h = a->h;
@@ -624,15 +626,15 @@ EXPORT INLINE void ba_check_allocator(const struct block_allocator * a,
 }
 #endif
 
-static INLINE ba_p ba_alloc_page(struct block_allocator * a) {
-    ba_p p;
+static INLINE struct ba_page * ba_alloc_page(struct block_allocator * a) {
+    struct ba_page * p;
 
     if (unlikely(a->num_pages >= 2*a->allocated)) {
 	ba_grow(a);
     }
 
     a->num_pages++;
-    p = (ba_p)BA_XALLOC(BA_PAGESIZE(a->l));
+    p = (struct ba_page *)BA_XALLOC(BA_PAGESIZE(a->l));
     ba_free_page(&a->l, p, a->blueprint);
     p->next = p->prev = NULL;
     ba_htable_insert(a, p);
@@ -643,8 +645,8 @@ static INLINE ba_p ba_alloc_page(struct block_allocator * a) {
     return p;
 }
 
-static INLINE ba_p ba_get_page(struct block_allocator * a) {
-    ba_p p;
+static INLINE struct ba_page * ba_get_page(struct block_allocator * a) {
+    struct ba_page * p;
 
     if (a->first) {
 	p = a->first;
@@ -685,7 +687,8 @@ EXPORT void ba_low_alloc(struct block_allocator * a) {
 #endif
 }
 
-EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
+EXPORT void ba_low_free(struct block_allocator * a, struct ba_page * p,
+			struct ba_block_header * ptr) {
 #ifdef BA_USE_VALGRIND
     VALGRIND_MEMPOOL_FREE(a, ptr);
     VALGRIND_MAKE_MEM_NOACCESS(ptr, a->l.block_size);
@@ -763,8 +766,8 @@ EXPORT struct ba_page * ba_find_page(const struct block_allocator * a,
 }
 
 EXPORT void ba_remove_page(struct block_allocator * a) {
-    ba_p p;
-    ba_p * c = &(a->empty), * max = c;
+    struct ba_page * p;
+    struct ba_page ** c = &(a->empty), ** max = c;
 
     /* I am not sure if this really helps. It should, by removing the
      * page which is highest in memory, potentially help malloc lower
@@ -825,7 +828,8 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 #ifdef BA_DEBUG
     ba_check_allocator(a, "ba_remove_page", __FILE__, __LINE__);
 #endif
-    if (a->allocated > BA_ALLOC_INITIAL && a->num_pages <= (a->allocated >> 2)) {
+    if (a->allocated > BA_ALLOC_INITIAL
+	&& a->num_pages <= (a->allocated >> 2)) {
 	ba_htable_shrink(a);
     }
 }
@@ -863,7 +867,7 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 
     ba_init_layout(&a->l, block_size, blocks);
     a->h.first = NULL;
-    a->page = (ba_p)NULL;
+    a->page = NULL;
     a->max_blocks = max_blocks;
     a->a = NULL;
     a->rel.simple = simple;
@@ -883,7 +887,7 @@ static struct ba_page * ba_local_grow_page(struct ba_page * p,
     ptrdiff_t diff;
     struct ba_page * n;
 
-    n = (ba_p)BA_XREALLOC(p, BA_PAGESIZE(*l));
+    n = (struct ba_page*)BA_XREALLOC(p, BA_PAGESIZE(*l));
 
     if (!p) {
 	ba_free_page(l, n, NULL);
@@ -989,7 +993,7 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 	    ba_local_grow(a, a->l.blocks*2);
 	} else {
 	    ba_init_layout(&a->l, a->l.block_size, a->l.blocks);
-	    a->page = (ba_p)BA_XALLOC(BA_PAGESIZE(a->l));
+	    a->page = (struct ba_page *)BA_XALLOC(BA_PAGESIZE(a->l));
 	    ba_free_page(&a->l, a->page, NULL);
 	    a->h = a->page->h;
 	}

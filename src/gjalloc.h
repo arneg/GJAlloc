@@ -237,9 +237,6 @@ struct ba_block_header * ba_sort_list(const struct ba_page *,
 				      struct ba_block_header *,
 				      const struct ba_layout *);
 
-typedef struct ba_page * ba_p;
-typedef struct ba_block_header * ba_b;
-
 /* we assume here that malloc has sizeof(void*) bytes of overhead */
 #define MALLOC_OVERHEAD (sizeof(void*))
 
@@ -271,11 +268,13 @@ struct ba_stats {
 struct block_allocator {
     struct ba_layout l;
     struct ba_page_header h;
-    ba_p alloc; /* current page used for allocation */
-    ba_p last_free;
-    ba_p first; /* doube linked list of other pages (!free,!full,!alloc) */
-    ba_p * pages;
-    ba_p empty; /* single linked list of empty pages */
+    /* current page used for allocation */
+    struct ba_page * alloc;
+    struct ba_page * last_free;
+    /* doube linked list of other pages (!free,!full,!alloc) */
+    struct ba_page * first;
+    struct ba_page * * pages;
+    struct ba_page * empty; /* single linked list of empty pages */
     uint32_t magnitude;
     uint32_t empty_pages;
     uint32_t max_empty_pages;
@@ -305,8 +304,8 @@ typedef struct block_allocator block_allocator;
     BA_INIT_STATS(block_size, blocks, name)\
 }
 
-EXPORT void ba_low_free(struct block_allocator * a,
-				    ba_p p, ba_b ptr);
+EXPORT void ba_low_free(struct block_allocator * a, struct ba_page * p,
+			struct ba_block_header * ptr);
 EXPORT void ba_show_pages(const struct block_allocator * a);
 EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 			 uint32_t blocks);
@@ -333,7 +332,7 @@ EXPORT void ba_walk(struct block_allocator * a,
 		    void * data);
 
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
-#define BA_BLOCKN(l, p, n) ((ba_b)(((char*)(p+1)) + (n)*((l).block_size)))
+#define BA_BLOCKN(l, p, n) ((struct ba_block_header *)(((char*)(p+1)) + (n)*((l).block_size)))
 /* Thinking about it, its not that crazy to not check for NULL. In case someone
  * passes us a ptr <= l.offset, something is broken anyway?! */
 #if defined(BA_DEBUG) /* || !defined(BA_CRAZY) */
@@ -341,7 +340,7 @@ EXPORT void ba_walk(struct block_allocator * a,
 #else
 # define BA_CHECK_PTR(l, p, ptr)	((size_t)((char*)ptr - (char*)(p)) <= (l).offset)
 #endif
-#define BA_LASTBLOCK(l, p) ((ba_b)((char*)(p) + (l).offset))
+#define BA_LASTBLOCK(l, p) ((struct ba_block_header*)((char*)(p) + (l).offset))
 
 #ifdef BA_STATS
 # define INC(X) do { (a->stats.X++); } while (0)
@@ -395,11 +394,11 @@ static INLINE struct ba_block_header * ba_shift(struct ba_page_header * h,
 #endif
 
     if (ptr->next == BA_ONE) {
-	h->first = (ba_b)(((char*)ptr) + l->block_size);
+	h->first = (struct ba_block_header*)(((char*)ptr) + l->block_size);
 #ifdef BA_USE_VALGRIND
 	VALGRIND_MAKE_MEM_DEFINED(h->first, sizeof(void*));
 #endif
-	h->first->next = (ba_b)(size_t)!(h->first == BA_LASTBLOCK(*l, p));
+	h->first->next = (struct ba_block_header*)(size_t)!(h->first == BA_LASTBLOCK(*l, p));
 #ifdef BA_USE_VALGRIND
 	VALGRIND_MAKE_MEM_NOACCESS(h->first, sizeof(void*));
 #endif
@@ -446,7 +445,7 @@ static INLINE void ba_align_layout(struct ba_layout * l) {
 
 ATTRIBUTE((malloc))
 static INLINE void * ba_alloc(struct block_allocator * a) {
-    ba_b ptr;
+    struct ba_block_header * ptr;
 #ifdef BA_STATS
     struct ba_stats *s = &a->stats;
 #endif
@@ -521,7 +520,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 
     ba_unshift(&p->h, (struct ba_block_header*)ptr);
 
-    if ((p->h.used) && (((ba_b)ptr)->next)) {
+    if ((p->h.used) && (((struct ba_block_header*)ptr)->next)) {
 	INC(free_fast2);
 #ifdef BA_USE_VALGRIND
 	VALGRIND_MEMPOOL_FREE(a, ptr);
@@ -529,7 +528,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	return;
     }
 
-    ba_low_free(a, p, (ba_b)ptr);
+    ba_low_free(a, p, (struct ba_block_header *)ptr);
 }
 
 #define MS(x)	#x
@@ -538,9 +537,9 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 #define LOW_PAGE_LOOP2(a, label, C...)	do {			\
     uint32_t __n;						\
     if (a->pages) for (__n = 0; __n < a->allocated; __n++) {	\
-	ba_p p = a->pages[__n];					\
+	struct ba_page * p = a->pages[__n];			\
 	while (p) {						\
-	    ba_p t = p->hchain;					\
+	    struct ba_page * t = p->hchain;			\
 	    do { C; goto SURVIVE ## label; } while(0);		\
 	    goto label; SURVIVE ## label: p = t;		\
 	}							\
@@ -602,7 +601,8 @@ static INLINE void ba_simple_rel_pointer(void * ptr, ptrdiff_t diff) {
 struct ba_local {
     struct ba_layout l;
     struct ba_page_header h;
-    ba_p page, last_free;
+    struct ba_page * page;
+    struct ba_page * last_free;
     struct block_allocator * a;
     struct ba_relocation rel;
     uint32_t max_blocks;
@@ -650,7 +650,7 @@ static INLINE void ba_lreserve(struct ba_local * a, uint32_t n) {
 
 ATTRIBUTE((malloc))
 static INLINE void * ba_lalloc(struct ba_local * a) {
-    ba_b ptr;
+    struct ba_block_header * ptr;
 
     if (ba_empty(&a->h))
 	ba_local_get_page(a);
@@ -688,8 +688,8 @@ static INLINE void ba_lfree(struct ba_local * a, void * ptr) {
     VALGRIND_MEMPOOL_FREE(a, ptr);
 #endif
 
-    if (!(p->h.used) || !(((ba_b)ptr)->next))
-	ba_low_free(a->a, p, (ba_b)ptr);
+    if (!(p->h.used) || !(((struct ba_block_header *)ptr)->next))
+	ba_low_free(a->a, p, (struct ba_block_header *)ptr);
 }
 
 /*
