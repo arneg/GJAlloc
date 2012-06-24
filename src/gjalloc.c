@@ -35,13 +35,16 @@ static INLINE void ba_htable_grow(struct block_allocator * a);
 } while (0)
 
 #define PRINT_LIST(a, name) do {		\
+    int c = 0;					\
     struct ba_page * _p = (a->name);		\
     fprintf(stderr, #name": ");			\
     while (_p) {				\
 	fprintf(stderr, "%p -> ", _p);		\
+	if (c++ > a->num_pages) break;		\
 	_p = _p->next;				\
     }						\
-    fprintf(stderr, "NULL\n");			\
+    if (_p) fprintf(stderr, "(cycle)\n");	\
+    else fprintf(stderr, "%p\n", NULL);		\
 } while (0)
 
 
@@ -719,6 +722,11 @@ EXPORT void ba_low_free(struct block_allocator * a, struct ba_page * p,
 	}
     } else { /* page was full */
 	INC(free_full);
+#ifdef BA_DEBUG
+	if (p->next || p->prev) {
+	    BA_ERROR("%p should be full, but next||prev\n", p);
+	}
+#endif
 	DOUBLE_LINK(a->first, p);
     }
 }
