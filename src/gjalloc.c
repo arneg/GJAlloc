@@ -1141,7 +1141,7 @@ EXPORT void ba_defragment_page(const struct ba_layout *l,
 			       void (*relocate)(void*, void*, size_t)) {
 
     if (!(h->flags & BA_FLAG_SORTED)) {
-	h->first = ba_sort_list(p, h->first, p);
+	h->first = ba_sort_list(p, h->first, l);
 	h->flags |= BA_FLAG_SORTED;
     }
     /* TODO */
