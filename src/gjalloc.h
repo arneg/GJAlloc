@@ -271,7 +271,7 @@ struct ba_stats {
 struct block_allocator {
     struct ba_layout l;
     struct ba_page_header h;
-    ba_p alloc; /* current page used for allocating */
+    ba_p alloc; /* current page used for allocation */
     ba_p last_free;
     ba_p first; /* doube linked list of other pages (!free,!full,!alloc) */
     ba_p * pages;
