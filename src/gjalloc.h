@@ -334,7 +334,9 @@ EXPORT void ba_walk(struct block_allocator * a,
 
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
 #define BA_BLOCKN(l, p, n) ((ba_b)(((char*)(p+1)) + (n)*((l).block_size)))
-#if defined(BA_DEBUG) || !defined(BA_CRAZY)
+/* Thinking about it, its not that crazy to not check for NULL. In case someone
+ * passes us a ptr <= l.offset, something is broken anyway?! */
+#if defined(BA_DEBUG) /* || !defined(BA_CRAZY) */
 # define BA_CHECK_PTR(l, p, ptr)	((p) && (size_t)((char*)ptr - (char*)(p)) <= (l).offset)
 #else
 # define BA_CHECK_PTR(l, p, ptr)	((size_t)((char*)ptr - (char*)(p)) <= (l).offset)
