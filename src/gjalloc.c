@@ -30,8 +30,18 @@ static INLINE void ba_htable_grow(struct block_allocator * a);
 
 #define BA_BYTES(a)	( (sizeof(ba_p) * ((a)->allocated) ) )
 
-#define PRINT_NODE(a, name) do {\
-    fprintf(stderr, #name": %p\n", a->name);\
+#define PRINT_NODE(a, name) do {		\
+    fprintf(stderr, #name": %p\n", a->name);	\
+} while (0)
+
+#define PRINT_LIST(a, name) do {		\
+    struct ba_page * _p = (a->name);		\
+    fprintf(stderr, #name": ");			\
+    while (_p) {				\
+	fprintf(stderr, "%p -> ", _p);		\
+	_p = _p->next;				\
+    }						\
+    fprintf(stderr, "NULL\n");			\
 } while (0)
 
 
@@ -41,8 +51,9 @@ EXPORT void ba_show_pages(const struct block_allocator * a) {
     fprintf(stderr, "max_empty_pages: %u\n", a->max_empty_pages);
     fprintf(stderr, "empty_pages: %u\n", a->empty_pages);
     fprintf(stderr, "magnitude: %u\n", a->magnitude);
-    PRINT_NODE(a, empty);
-    PRINT_NODE(a, first);
+    PRINT_NODE(a, alloc);
+    PRINT_LIST(a, empty);
+    PRINT_LIST(a, first);
     PRINT_NODE(a, last_free);
 
     a->alloc->h = a->h;
@@ -548,8 +559,9 @@ LOOKUP:
 }
 
 #ifdef BA_DEBUG
-EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
-				    char *fun, char *file, int line) {
+EXPORT INLINE void ba_check_allocator(const struct block_allocator * a,
+				      const char *fun, const char *file,
+				      int line) {
     uint32_t n;
     int bad = 0;
     ba_p p;
@@ -567,13 +579,24 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 	p = a->pages[n];
 
 	while (p) {
+	    /* TODO: this check is broken for local allocators. Its not
+	     * necessarily triggered right now...
+	     */
 	    if (p != a->alloc) {
-		if (p->prev || p->next) {
-		    fprintf(stderr, "page %p is full but in list. next: %p"
-			     "prev: %p\n",
-			    p, p->next,
-			    p->prev);
-		    bad = 1;
+		if (!p->h.first) {
+		    if (p->prev || p->next) {
+			fprintf(stderr, "page %p is full but in list."
+				" next: %p prev: %p\n",
+				p, p->next,
+				p->prev);
+			bad = 1;
+		    }
+		    if (p->h.used != a->l.blocks) {
+			fprintf(stderr, "page %p has no first, but "
+				"used != blocks (%u != %u)\n",
+				p, p->h.used, a->l.blocks);
+			bad = 1;
+		    }
 		}
 	    }
 
@@ -587,9 +610,9 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 	    p = p->hchain;
 	}
 
-	if (bad)
-	    ba_print_htable(a);
     }
+    if (bad)
+	ba_print_htable(a);
 
     if (bad) {
 	ba_show_pages(a);

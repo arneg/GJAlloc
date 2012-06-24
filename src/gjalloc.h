@@ -87,7 +87,7 @@ extern "C" {
 # else
 #  include <stdio.h>
 #  include <unistd.h>
-
+ATTRIBUTE((noreturn))
 static inline void __error(int line, char * file, char * msg) {
     fprintf(stderr, "%s:%d\t%s\n", file, line, msg);
     _exit(1);
@@ -316,7 +316,8 @@ EXPORT void ba_find_page(struct block_allocator * a,
 EXPORT void ba_remove_page(struct block_allocator * a);
 #ifdef BA_DEBUG
 EXPORT void ba_print_htable(const struct block_allocator * a);
-EXPORT void ba_check_allocator(struct block_allocator * a, char*, char*, int);
+EXPORT void ba_check_allocator(const struct block_allocator *, const char*,
+			       const char*, int);
 #endif
 EXPORT void ba_print_hashstats(const struct block_allocator * a);
 #ifdef BA_STATS
