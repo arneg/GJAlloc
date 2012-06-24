@@ -603,7 +603,7 @@ EXPORT INLINE void ba_check_allocator(struct block_allocator * a,
 static INLINE ba_p ba_alloc_page(struct block_allocator * a) {
     ba_p p;
 
-    if (unlikely(a->num_pages == a->allocated)) {
+    if (unlikely(a->num_pages >= 2*a->allocated)) {
 	ba_grow(a);
     }
 
