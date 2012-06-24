@@ -311,8 +311,8 @@ EXPORT void ba_show_pages(const struct block_allocator * a);
 EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 			 uint32_t blocks);
 EXPORT void ba_low_alloc(struct block_allocator * a);
-EXPORT void ba_find_page(struct block_allocator * a,
-			 const void * ptr);
+EXPORT struct ba_page * ba_find_page(const struct block_allocator * a,
+				     const void * ptr);
 EXPORT void ba_remove_page(struct block_allocator * a);
 #ifdef BA_DEBUG
 EXPORT void ba_print_htable(const struct block_allocator * a);
@@ -328,7 +328,8 @@ EXPORT size_t ba_count(const struct block_allocator * a);
 EXPORT void ba_count_all(const struct block_allocator * a, size_t *num,
 			 size_t *size);
 EXPORT void ba_destroy(struct block_allocator * a);
-EXPORT void ba_walk(struct block_allocator * a, void (*callback)(void*,void*,void*),
+EXPORT void ba_walk(struct block_allocator * a,
+		    void (*callback)(void*,void*,void*),
 		    void * data);
 
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
@@ -510,11 +511,11 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	return;
     }
 
-    if (!BA_CHECK_PTR(a->l, a->last_free, ptr)) {
-	ba_find_page(a, ptr);
-    }
-
     p = a->last_free;
+
+    if (!BA_CHECK_PTR(a->l, p, ptr)) {
+	p = a->last_free = ba_find_page(a, ptr);
+    }
 
     ba_unshift(&p->h, (struct ba_block_header*)ptr);
 
@@ -674,12 +675,11 @@ static INLINE void ba_lfree(struct ba_local * a, void * ptr) {
 	return;
     }
 
-    if (!BA_CHECK_PTR(a->l, a->last_free, ptr)) {
-	ba_find_page(a->a, ptr);
-	a->last_free = a->a->last_free;
-    }
-
     p = a->last_free;
+
+    if (!BA_CHECK_PTR(a->l, p, ptr)) {
+	a->last_free = p = ba_find_page(a->a, ptr);
+    }
 
     ba_unshift(&p->h, (struct ba_block_header *)ptr);
 #ifdef BA_USE_VALGRIND

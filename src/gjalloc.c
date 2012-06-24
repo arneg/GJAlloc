@@ -535,8 +535,9 @@ static INLINE void ba_htable_delete(const struct block_allocator * a,
 #endif
 }
 
-static INLINE void ba_htable_lookup(struct block_allocator * a,
-				    const void * ptr) {
+static INLINE
+struct ba_page * ba_htable_lookup(const struct block_allocator * a,
+				  const void * ptr) {
     ba_p p;
     uint32_t h[2];
     unsigned char c, b = 0;
@@ -549,13 +550,13 @@ LOOKUP:
     p = a->pages[h[c] & BA_HASH_MASK(a)];
     while (p) {
 	if (BA_CHECK_PTR(a->l, p, ptr)) {
-	    a->last_free = p;
-	    return;
+	    return p;
 	}
 	p = p->hchain;
     }
     c = !c;
     if (!(b++)) goto LOOKUP;
+    return NULL;
 }
 
 #ifdef BA_DEBUG
@@ -719,34 +720,35 @@ EXPORT void ba_low_free(struct block_allocator * a, ba_p p, ba_b ptr) {
     }
 }
 
-static INLINE void ba_htable_linear_lookup(struct block_allocator * a,
-				    const void * ptr) {
+static INLINE
+struct ba_page * ba_htable_linear_lookup(const struct block_allocator * a,
+					 const void * ptr) {
     PAGE_LOOP(a, {
 	if (BA_CHECK_PTR(a->l, p, ptr)) {
-	    a->last_free = p;
-	    return;
+	    return p;
 	}
     });
+    return NULL;
 }
 
-EXPORT void ba_find_page(struct block_allocator * a,
+EXPORT struct ba_page * ba_find_page(const struct block_allocator * a,
 				     const void * ptr) {
-    a->last_free = NULL;
+    struct ba_page * p;
 #ifdef BA_DEBUG
     ba_check_allocator(a, "ba_low_free", __FILE__, __LINE__);
 #endif
 #ifdef BA_HASH_THLD
     if (a->num_pages <= BA_HASH_THLD) {
 	INC(find_linear);
-	ba_htable_linear_lookup(a, ptr);
+	p = ba_htable_linear_lookup(a, ptr);
     } else {
 #endif
 	INC(find_hash);
-	ba_htable_lookup(a, ptr);
+	p = ba_htable_lookup(a, ptr);
 #ifdef BA_HASH_THLD
     }
 #endif
-    if (a->last_free) return;
+    if (p) return p;
     
 #ifdef BA_DEBUG
     fprintf(stderr, "magnitude: %u\n", a->magnitude);
