@@ -648,8 +648,18 @@ static INLINE struct ba_page * ba_alloc_page(struct block_allocator * a) {
     return p;
 }
 
-static INLINE struct ba_page * ba_get_page(struct block_allocator * a) {
-    struct ba_page * p;
+/*
+ * Get a new page from the allocator to allocate blocks from. p is the old
+ * one which is full now.
+ */
+EXPORT struct ba_page * ba_get_page(struct block_allocator * a,
+				    struct ba_page * p) {
+
+    if (p) {
+	p->h.first = NULL;
+	p->h.used = a->l.blocks;
+	p->h.flags = BA_FLAG_SORTED;
+    }
 
     if (a->first) {
 	p = a->first;
@@ -664,30 +674,6 @@ static INLINE struct ba_page * ba_get_page(struct block_allocator * a) {
     p->next = NULL;
 
     return p;
-}
-
-EXPORT void ba_low_alloc(struct block_allocator * a) {
-    /* fprintf(stderr, "ba_alloc(%p)\n", a); */
-#ifdef BA_DEBUG
-    ba_check_allocator(a, "ba_alloc top", __FILE__, __LINE__);
-#endif
-    if (a->alloc) {
-	a->alloc->h = a->h;
-    }
-
-    a->alloc = ba_get_page(a);
-    a->h = a->alloc->h;
-
-#ifdef BA_DEBUG
-    if (!a->h.first) {
-	ba_show_pages(a);
-	BA_ERROR("a->first has no first block!\n");
-    }
-#endif
-
-#ifdef BA_DEBUG
-    ba_check_allocator(a, "ba_alloc after grow", __FILE__, __LINE__);
-#endif
 }
 
 EXPORT void ba_low_free(struct block_allocator * a, struct ba_page * p,
@@ -988,12 +974,8 @@ EXPORT INLINE void ba_local_grow(struct ba_local * a,
 
 EXPORT void ba_local_get_page(struct ba_local * a) {
     if (a->a) {
-	/* old page is full */
-	if (a->page) {
-	    a->page->h = a->h;
-	}
 	/* get page from allocator */
-	a->page = ba_get_page(a->a);
+	a->page = ba_get_page(a->a, a->page);
 	a->h = a->page->h;
     } else {
 	if (a->page) {
