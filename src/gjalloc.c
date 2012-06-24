@@ -1112,6 +1112,26 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
     return b;
 }
 
+EXPORT void ba_defragment_page(const struct ba_layout *l,
+			       struct ba_page_header * h,
+			       struct ba_page * p,
+			       void (*relocate)(void*, void*, size_t)) {
+
+    if (!(h->flags & BA_FLAG_SORTED)) {
+	h->first = ba_sort_list(p, h->first, p);
+	h->flags |= BA_FLAG_SORTED;
+    }
+    /* TODO */
+}
+
+EXPORT void ba_merge_page(const struct ba_layout *l,
+			  struct ba_page_header *h,
+			  struct ba_page * p1,
+			  struct ba_page * p2,
+			  void (*relocate)(void*, void*, size_t)) {
+    /* TODO */
+}
+
 
 #ifdef __cplusplus
 }
