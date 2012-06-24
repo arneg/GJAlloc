@@ -704,11 +704,11 @@ EXPORT void ba_low_free(struct block_allocator * a, struct ba_page * p,
 	 */
 	p->h.first = BA_BLOCKN(a->l, p, 0);
 #ifdef BA_USE_VALGRIND
-	VALGRIND_MAKE_MEM_DEFINED(a->h.first, sizeof(void*));
+	VALGRIND_MAKE_MEM_DEFINED(p->h.first, sizeof(void*));
 #endif
 	p->h.first->next = BA_ONE;
 #ifdef BA_USE_VALGRIND
-	VALGRIND_MAKE_MEM_NOACCESS(a->h.first, sizeof(void*));
+	VALGRIND_MAKE_MEM_NOACCESS(p->h.first, sizeof(void*));
 #endif
 	SINGLE_LINK(a->empty, p);
 	a->empty_pages ++;
