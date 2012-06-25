@@ -799,15 +799,6 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 
     ba_htable_delete(a, p);
 
-    /* we dont know that p == a->last_free. However, since
-     * we dont touch last_free, unless in DEBUG mode, we can
-     * leave it and let the next free take care of it.
-     */
-#ifdef BA_DEBUG
-    if (p == a->last_free)
-	a->last_free = NULL;
-#endif
-
 #ifdef BA_DEBUG
     memset(p, 0, sizeof(struct ba_page));
     if (a->first == p) {
