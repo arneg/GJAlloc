@@ -288,6 +288,7 @@ struct block_allocator {
     /* current page used for allocation */
     struct ba_page * alloc;
     struct ba_page * last_free;
+    struct ba_page_header hf;
     /* doube linked list of other pages (!free,!full,!alloc) */
     struct ba_page * first;
     struct ba_page * * pages;
@@ -309,6 +310,7 @@ typedef struct block_allocator block_allocator;
     BA_INIT_HEADER(),\
     NULL/*alloc*/,\
     NULL/*last_free*/,\
+    BA_INIT_HEADER(),\
     NULL/*first*/,\
     NULL/*pages*/,\
     NULL/*empty*/,\
@@ -469,8 +471,18 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 #endif
 
     if (ba_empty(&a->h)) {
+#ifdef BA_DEBUG
+	if (a->alloc && a->h.used != a->l.blocks) {
+	    ba_error("page is full, but used != blocks (%u != %u)\n",
+		     a->h.used, a->l.blocks);
+	}
+#endif
+
 	a->alloc = ba_get_page(a, a->alloc);
-	a->h = a->alloc->h;
+	if (a->alloc == a->last_free) {
+	    a->h = a->hf;
+	    a->last_free = NULL;
+	} else a->h = a->alloc->h;
 #ifdef BA_DEBUG
 	if (!a->h.first) {
 	    ba_show_pages(a);
@@ -538,13 +550,15 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 
     p = a->last_free;
 
-    if (!BA_CHECK_PTR(a->l, p, ptr)) {
+    if (unlikely(!BA_CHECK_PTR(a->l, p, ptr))) {
+	if (p) p->h = a->hf;
 	p = a->last_free = ba_find_page(a, ptr);
+	a->hf = p->h;
     }
 
-    ba_unshift(&p->h, (struct ba_block_header*)ptr);
+    ba_unshift(&a->hf, (struct ba_block_header*)ptr);
 
-    if ((p->h.used) && (((struct ba_block_header*)ptr)->next)) {
+    if ((a->hf.used) && (((struct ba_block_header*)ptr)->next)) {
 	INC(free_fast2);
 #ifdef BA_USE_VALGRIND
 	VALGRIND_MEMPOOL_FREE(a, ptr);
@@ -552,7 +566,10 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	return;
     }
 
+    p->h = a->hf;
     ba_low_free(a, p, (struct ba_block_header *)ptr);
+    /* TODO: it might get freed */
+    a->last_free = NULL;
 }
 
 #define MS(x)	#x
@@ -622,6 +639,7 @@ static INLINE void ba_simple_rel_pointer(char * ptr, ptrdiff_t diff) {
     BA_INIT_HEADER(),\
     /**/NULL,\
     /**/NULL,\
+    BA_INIT_HEADER(),\
     /**/max_blocks,\
     /**/NULL,\
     { NULL, NULL }\
@@ -632,6 +650,7 @@ struct ba_local {
     struct ba_page_header h;
     struct ba_page * page;
     struct ba_page * last_free;
+    struct ba_page_header hf;
     struct block_allocator * a;
     struct ba_relocation rel;
     uint32_t max_blocks;
@@ -681,8 +700,15 @@ ATTRIBUTE((malloc))
 static INLINE void * ba_lalloc(struct ba_local * a) {
     struct ba_block_header * ptr;
 
-    if (ba_empty(&a->h))
+    if (ba_empty(&a->h)) {
+#ifdef BA_DEBUG
+	if (a->page && a->h.used != a->l.blocks) {
+	    ba_error("page is full, but used != blocks (%u != %u)\n",
+		     a->h.used, a->l.blocks);
+	}
+#endif
 	ba_local_get_page(a);
+    }
 #ifdef BA_USE_VALGRIND
     VALGRIND_MEMPOOL_ALLOC(a, a->h.first, a->l.block_size);
 #endif
@@ -710,15 +736,19 @@ static INLINE void ba_lfree(struct ba_local * a, void * ptr) {
 
     if (!BA_CHECK_PTR(a->l, p, ptr)) {
 	a->last_free = p = ba_find_page(a->a, ptr);
+	a->hf = p->h;
     }
 
-    ba_unshift(&p->h, (struct ba_block_header *)ptr);
+    ba_unshift(&a->hf, (struct ba_block_header *)ptr);
 #ifdef BA_USE_VALGRIND
     VALGRIND_MEMPOOL_FREE(a, ptr);
 #endif
 
-    if (!(p->h.used) || !(((struct ba_block_header *)ptr)->next))
+    if (!(a->hf.used) || !(((struct ba_block_header *)ptr)->next)) {
+	p->h = a->hf;
+	a->last_free = NULL;
 	ba_low_free(a->a, p, (struct ba_block_header *)ptr);
+    }
 }
 
 /*

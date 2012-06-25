@@ -967,7 +967,10 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
     if (a->a) {
 	/* get page from allocator */
 	a->page = ba_get_page(a->a, a->page);
-	a->h = a->page->h;
+	if (a->page == a->last_free) {
+	    a->h = a->hf;
+	    a->last_free = NULL;
+	} else a->h = a->page->h;
     } else {
 	if (a->page) {
 	    /* double the size */
