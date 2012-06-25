@@ -891,6 +891,9 @@ static struct ba_page * ba_local_grow_page(struct ba_page * p,
 	while (*t > BA_ONE) {
 	    ba_simple_rel_pointer((char*)t, diff);
 	    t = &((*t)->next);
+#ifdef BA_USE_VALGRIND
+	    VALGRIND_MAKE_MEM_DEFINED(*t, sizeof(void*));
+#endif
 	}
 	if (*t == NULL) {
 	    *t = (struct ba_block_header*)((char*)n + BA_PAGESIZE(*ol));
@@ -919,6 +922,9 @@ static struct ba_page * ba_local_grow_page(struct ba_page * p,
 #endif
 	});
     } else {
+#ifdef BA_USE_VALGRIND
+	ba_list_defined(n, h->first, l);
+#endif
 	while (*t > BA_ONE) {
 	    t = &((*t)->next);
 	}
@@ -926,6 +932,9 @@ static struct ba_page * ba_local_grow_page(struct ba_page * p,
 	    *t = (struct ba_block_header*)((char*)n + BA_PAGESIZE(*ol));
 	    (*t)->next = BA_ONE;
 	}
+#ifdef BA_USE_VALGRIND
+	ba_list_noaccess(n, h->first, l);
+#endif
     }
 
     return n;
