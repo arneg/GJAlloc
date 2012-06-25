@@ -35,7 +35,7 @@ static INLINE void ba_htable_grow(struct block_allocator * a);
 } while (0)
 
 #define PRINT_LIST(a, name) do {		\
-    int c = 0;					\
+    uint32_t c = 0;				\
     struct ba_page * _p = (a->name);		\
     fprintf(stderr, #name": ");			\
     while (_p) {				\
@@ -44,7 +44,7 @@ static INLINE void ba_htable_grow(struct block_allocator * a);
 	_p = _p->next;				\
     }						\
     if (_p) fprintf(stderr, "(cycle)\n");	\
-    else fprintf(stderr, "%p\n", NULL);		\
+    else fprintf(stderr, "(nil)\n");		\
 } while (0)
 
 
@@ -898,7 +898,7 @@ static struct ba_page * ba_local_grow_page(struct ba_page * p,
 	 * relocate all free list pointers and append new blocks at the end
 	 */
 	while (*t > BA_ONE) {
-	    ba_simple_rel_pointer(t, diff);
+	    ba_simple_rel_pointer((char*)t, diff);
 	    t = &((*t)->next);
 	}
 	if (*t == NULL) {
