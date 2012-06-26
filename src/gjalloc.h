@@ -521,7 +521,6 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 }
 
 
-ATTRIBUTE((always_inline))
 static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     struct ba_page * p;
 
