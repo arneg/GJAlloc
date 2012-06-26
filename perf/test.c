@@ -63,14 +63,22 @@ long int run2(long int n, uint32_t * shuffler) {
 	    p[j] = TEST_ALLOC(foo);
 	    ((struct foo *)p[j])->ptr = p + j;
 	}
+#ifdef TEST_FREE
 	for (j = 0; j < n; j++) {
+#ifdef RANDOM
 	    long int k = shuffler[j];
 	    TEST_FREE(foo, p[k]);
+#else
+	    TEST_FREE(foo, p[j]);
+#endif
 	}
+#elif defined(TEST_FREEALL)
+	TEST_FREEALL(foo);
+#endif
     }
     clock_gettime(CLOCK_MONOTONIC, &t2);
     mdiff += diff(t1, t2);
-
+#if 0
     // get memory use
     for (j = 0; j < n; j++) {
 	p[j] = TEST_ALLOC(foo);
@@ -80,9 +88,14 @@ long int run2(long int n, uint32_t * shuffler) {
     bytes = used_bytes(mallinfo()) - bytes_base;
 #endif
     for (j = 0; j < n; j++) {
+#ifdef RANDOM
 	long int k = shuffler[j];
 	TEST_FREE(foo, p[k]);
+#else
+	TEST_FREE(foo, p[j]);
+#endif
     }
+#endif
 
     return runs * n;
 }

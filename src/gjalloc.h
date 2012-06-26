@@ -6,6 +6,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdlib.h>
 #if defined(BA_MEMTRACE) || defined(BA_DEBUG)
 # ifdef __cplusplus
 #  include <cstdio>
@@ -331,6 +332,7 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 EXPORT struct ba_page * ba_find_page(const struct block_allocator * a,
 				     const void * ptr);
 EXPORT void ba_remove_page(struct block_allocator * a);
+EXPORT struct ba_page * ba_low_alloc_page(const struct ba_layout * l);
 EXPORT struct ba_page * ba_get_page(struct block_allocator * a,
 				    struct ba_page * p);
 #ifdef BA_DEBUG
@@ -391,7 +393,7 @@ static INLINE size_t ba_capacity(const struct block_allocator * a) {
     return (size_t)a->num_pages * a->l.blocks;
 }
 
-static INLINE int ba_empty(struct ba_page_header * h) {
+static INLINE int ba_empty(const struct ba_page_header * h) {
     return !(h->first);
 }
 
@@ -754,6 +756,78 @@ static INLINE void ba_lfree(struct ba_local * a, void * ptr) {
  * =============================================
  * Here comes definitions for shared allocators.
  */
+
+
+/* Here comes definitions for a dummy allocator.
+ * It is implemented comletely as inoine functions, and cannot
+ * free items. Its supposed to be used when allocating
+ * temporary nodes.
+ * =============================================
+ */
+
+struct ba_temporary {
+    struct ba_layout l;
+    struct ba_page_header h;
+    struct ba_page * page;
+    uint32_t num_pages;
+};
+
+static INLINE void ba_init_temporary(struct ba_temporary * a,
+				     uint32_t block_size,
+				     uint32_t blocks) {
+    if (!blocks) blocks = 128;
+    if (block_size < sizeof(struct ba_block_header)) {
+	block_size = sizeof(struct ba_block_header);
+    }
+    ba_init_layout(&a->l, block_size, blocks);
+    ba_align_layout(&a->l);
+    a->h.first = NULL;
+    a->page = NULL;
+    a->num_pages = 0;
+}
+
+ATTRIBUTE((malloc))
+static INLINE void * ba_talloc(struct ba_temporary * a) {
+    if (ba_empty(&a->h)) {
+	struct ba_page * p = ba_low_alloc_page(&a->l);
+	p->next = a->page;
+	a->page = p;
+	a->h = p->h;
+	a->num_pages++;
+    }
+    
+    return ba_shift(&a->h, a->page, &a->l);
+}
+
+typedef void (*ba_walk_callback)(void*,void*,void*);
+
+static INLINE void ba_walk_temporary(const struct ba_temporary * a,
+				     ba_walk_callback callback,
+				     void * data) {
+    struct ba_page * p = a->page;
+    if (!ba_empty(&a->h)) {
+	callback(BA_BLOCKN(a->l, p, 0), a->h.first, data);
+	goto rest;
+    }
+
+    while (p) {
+	callback(BA_BLOCKN(a->l, p, 0),
+		 (char*)BA_LASTBLOCK(a->l, p) + a->l.block_size, data);
+rest:
+	p = p->next;
+    }
+}
+
+static INLINE void ba_tdestroy(struct ba_temporary * a) {
+    struct ba_page * p = a->page;
+    while (p) {
+	struct ba_page * n = p->next;
+	free(p);
+	p = n;
+    }
+    a->page = NULL;
+    a->h.first = NULL;
+}
 
 #endif /* BLOCK_ALLOCATOR_H */
 #ifdef __cplusplus
