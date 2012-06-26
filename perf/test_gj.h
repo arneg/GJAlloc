@@ -1,5 +1,6 @@
 #include "gjalloc.h"
-#define TEST_INIT(t)	static block_allocator allocator = BA_INIT(sizeof(struct t), 0)
+#define TEST_INIT(t)	static struct block_allocator allocator = BA_INIT(sizeof(struct t), 0)
+#define DYNAMIC_INIT(t)
 #define TEST_ALLOC(t)	ba_alloc(&allocator);
 #define TEST_FREE(t, p)	ba_free(&allocator, p);
 #ifdef BA_STATS
@@ -8,3 +9,4 @@
 # define TEST_DEINIT(t)	do { ba_destroy(&allocator); } while (0)
 #endif
 #define TEST_NUM_PAGES(t, v)	do { v = allocator.num_pages; } while(0)
+#define TEST_WALK(t, callback, data)	ba_walk(&allocator, callback, data)

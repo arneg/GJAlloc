@@ -46,6 +46,15 @@ uint32_t num_pages = 0;
 size_t bytes = 0, bytes_base;
 TEST_INIT(foo);
 
+void relocate_simple(void * ptr, void * stop, ptrdiff_t diff) {
+    struct foobar * f = (struct foobar *)ptr;
+
+    fprintf(stderr, "relocating from %p to %p\n", ptr, stop);
+    while (f < (struct foobar *)stop) {
+	ba_simple_rel_pointer(f->ptr, diff);
+    }
+}
+
 #ifndef NO_MEM_USAGE
 static inline size_t used_bytes(const struct mallinfo info) {
     return (size_t)info.uordblks + (size_t)info.hblkhd;

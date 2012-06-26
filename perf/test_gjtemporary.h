@@ -5,3 +5,4 @@
 #define TEST_FREEALL(t)	ba_tdestroy(&allocator);
 #define TEST_DEINIT(t)	do { } while (0)
 #define TEST_NUM_PAGES(t, v)	do { v = allocator.num_pages; } while(0)
+#define TEST_WALK(t, callback, data)	ba_walk_temporary(&allocator, callback, data)
