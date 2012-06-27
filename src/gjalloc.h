@@ -827,6 +827,7 @@ static INLINE void ba_tdestroy(struct ba_temporary * a) {
     }
     a->page = NULL;
     a->h.first = NULL;
+    a->num_pages = 0;
 }
 
 #endif /* BLOCK_ALLOCATOR_H */
