@@ -47,7 +47,7 @@ size_t bytes = 0, bytes_base;
 TEST_INIT(foo);
 
 void relocate_simple(void * ptr, void * stop, ptrdiff_t diff) {
-    struct foobar * f = (struct foobar *)ptr;
+    struct foo * f = (struct foo *)ptr;
 
     fprintf(stderr, "relocating from %p to %p\n", ptr, stop);
     while (f < (struct foobar *)stop) {
@@ -87,23 +87,25 @@ long int run2(long int n, uint32_t * shuffler) {
     }
     clock_gettime(CLOCK_MONOTONIC, &t2);
     mdiff += diff(t1, t2);
-#if 0
+#ifndef NO_MEM_USAGE
     // get memory use
     for (j = 0; j < n; j++) {
 	p[j] = TEST_ALLOC(foo);
     }
     TEST_NUM_PAGES(foo, num_pages);
-#ifndef NO_MEM_USAGE
     bytes = used_bytes(mallinfo()) - bytes_base;
-#endif
+#ifdef TEST_FREE
     for (j = 0; j < n; j++) {
-#ifdef RANDOM
+# ifdef RANDOM
 	long int k = shuffler[j];
 	TEST_FREE(foo, p[k]);
-#else
+# else
 	TEST_FREE(foo, p[j]);
-#endif
+# endif
     }
+#elif defined(TEST_FREEALL)
+    TEST_FREEALL(foo);
+#endif
 #endif
 
     return runs * n;
