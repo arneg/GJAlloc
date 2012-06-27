@@ -1,9 +1,10 @@
 #include "gjalloc.h"
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stddef.h>
 
 #define N 64
-struct ba_local a;
 
 struct foo {
     unsigned long long n;
@@ -38,30 +39,35 @@ void callback(struct foo * start, struct foo * stop, void * data) {
     }
 }
 
+TEST_INIT(foo);
 
 int main() {
     size_t i;
 
     list = (struct foo**)malloc(N*sizeof(struct foo));
-    ba_init_local(&a, sizeof(struct foo), 16, 512, relocate_simple, NULL);
-
-    //ba_lreserve(&a, N);
+    DYNAMIC_INIT(foo);
 
     for (i = 0; i < N; i++) {
-	list[i] = ba_lalloc(&a);
+	list[i] = TEST_ALLOC(foo);
 	list[i]->free = 0;
 	list[i]->n = i;
+#ifdef TEST_FREE
+	if (i & 1) {
+	    list[i-1]->free = 1;
+	    TEST_FREE(foo, list[i-1]);
+	}
+#endif
     }
 
+#ifdef TEST_FREE
     list[5]->free = 1;
     list[7]->free = 1;
-    list[2]->free = 1;
-    ba_lfree(&a, list[5]);
-    ba_lfree(&a, list[7]);
-    ba_lfree(&a, list[2]);
-    ba_walk_local(&a, callback, NULL);
+    TEST_FREE(&a, list[5]);
+    TEST_FREE(&a, list[7]);
+#endif
+    TEST_WALK(&a, callback, NULL);
 
-    ba_ldestroy(&a);
+    TEST_DEINIT(foo);
     free(list);
 
     return 0;
