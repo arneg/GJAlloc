@@ -634,6 +634,7 @@ EXPORT struct ba_page * ba_low_alloc_page(const struct ba_layout * l) {
     struct ba_page * p;
     p = (struct ba_page *)BA_XALLOC(BA_PAGESIZE(*l));
     p->h.first = BA_BLOCKN(*l, p, 0);
+    p->h.first->next = BA_ONE;
     p->h.used = 0;
     p->h.flags = BA_FLAG_SORTED;
     p->prev = p->next = NULL;
