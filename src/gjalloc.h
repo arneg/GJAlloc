@@ -324,8 +324,7 @@ typedef struct block_allocator block_allocator;
     BA_INIT_STATS(block_size, blocks, name)\
 }
 
-EXPORT void ba_low_free(struct block_allocator * a, struct ba_page * p,
-			struct ba_block_header * ptr);
+EXPORT void ba_get_free_page(struct block_allocator * a, const void * ptr);
 EXPORT void ba_show_pages(const struct block_allocator * a);
 EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 			 uint32_t blocks);
@@ -524,7 +523,7 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 
 
 static INLINE void ba_free(struct block_allocator * a, void * ptr) {
-    struct ba_page * p;
+    struct ba_page_header * t;
 
 #ifdef BA_MEMTRACE
     PRINT("%% %p\n", ptr);
@@ -539,38 +538,23 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 #ifdef BA_STATS
     a->stats.st_used--;
 #endif
-    if (likely(BA_CHECK_PTR(a->l, a->alloc, ptr))) {
+    if ((BA_CHECK_PTR(a->l, a->alloc, ptr))) {
 	INC(free_fast1);
-	ba_unshift(&a->h, (struct ba_block_header*)ptr);
+	t = &a->h;
+	goto DO_FREE;
+    }
+
+    if (!BA_CHECK_PTR(a->l, a->last_free, ptr)) {
+	ba_get_free_page(a, ptr);
+    }
+
+    t = &a->hf;
+DO_FREE:
+    ba_unshift(t, (struct ba_block_header*)ptr);
 #ifdef BA_USE_VALGRIND
-	VALGRIND_MAKE_MEM_NOACCESS(ptr, a->l.block_size);
-	VALGRIND_MEMPOOL_FREE(a, ptr);
+    VALGRIND_MAKE_MEM_NOACCESS(ptr, a->l.block_size);
+    VALGRIND_MEMPOOL_FREE(a, ptr);
 #endif
-	return;
-    }
-
-    p = a->last_free;
-
-    if (unlikely(!BA_CHECK_PTR(a->l, p, ptr))) {
-	if (p) p->h = a->hf;
-	p = a->last_free = ba_find_page(a, ptr);
-	a->hf = p->h;
-    }
-
-    ba_unshift(&a->hf, (struct ba_block_header*)ptr);
-
-    if ((a->hf.used) && (((struct ba_block_header*)ptr)->next)) {
-	INC(free_fast2);
-#ifdef BA_USE_VALGRIND
-	VALGRIND_MEMPOOL_FREE(a, ptr);
-#endif
-	return;
-    }
-
-    p->h = a->hf;
-    ba_low_free(a, p, (struct ba_block_header *)ptr);
-    /* TODO: it might get freed */
-    a->last_free = NULL;
 }
 
 #define MS(x)	#x
@@ -664,6 +648,7 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 
 EXPORT void ba_local_grow(struct ba_local * a, uint32_t blocks);
 EXPORT void ba_local_get_page(struct ba_local * a);
+EXPORT void ba_local_get_free_page(struct ba_local * a, const void * ptr);
 EXPORT size_t ba_lcount(const struct ba_local * a);
 EXPORT void ba_ldestroy(struct ba_local * a);
 EXPORT void ba_lfree_all(struct ba_local * a);
@@ -699,7 +684,6 @@ static INLINE void ba_lreserve(struct ba_local * a, uint32_t n) {
 
 ATTRIBUTE((malloc))
 static INLINE void * ba_lalloc(struct ba_local * a) {
-    struct ba_block_header * ptr;
 
     if (ba_empty(&a->h)) {
 #ifdef BA_DEBUG
@@ -713,43 +697,32 @@ static INLINE void * ba_lalloc(struct ba_local * a) {
 #ifdef BA_USE_VALGRIND
     VALGRIND_MEMPOOL_ALLOC(a, a->h.first, a->l.block_size);
 #endif
-
-    ptr = ba_shift(&a->h, a->page, &a->l);
-
 #ifdef BA_USE_VALGRIND
-    VALGRIND_MAKE_MEM_UNDEFINED(ptr, a->l.block_size);
+    VALGRIND_MAKE_MEM_UNDEFINED(a->h.first, a->l.block_size);
 #endif
 
-    return ptr;
+    return ba_shift(&a->h, a->page, &a->l);
 }
 
 static INLINE void ba_lfree(struct ba_local * a, void * ptr) {
-    struct ba_page * p;
+    struct ba_page_header * t;
     if (!a->a || BA_CHECK_PTR(a->l, a->page, ptr)) {
-	ba_unshift(&a->h, (struct ba_block_header *)ptr);
-#ifdef BA_USE_VALGRIND
-	VALGRIND_MEMPOOL_FREE(a, ptr);
-#endif
-	return;
+	t = &a->h;
+	goto DO_FREE;
     }
 
-    p = a->last_free;
+    t = &a->hf;
 
-    if (!BA_CHECK_PTR(a->l, p, ptr)) {
-	a->last_free = p = ba_find_page(a->a, ptr);
-	a->hf = p->h;
+    if (!BA_CHECK_PTR(a->l, a->last_free, ptr)) {
+	ba_local_get_free_page(a, ptr);
     }
 
-    ba_unshift(&a->hf, (struct ba_block_header *)ptr);
+DO_FREE:
+    ba_unshift(t, (struct ba_block_header *)ptr);
 #ifdef BA_USE_VALGRIND
     VALGRIND_MEMPOOL_FREE(a, ptr);
+    VALGRIND_MAKE_MEM_NOACCESS(ptr, a->l.block_size);
 #endif
-
-    if (!(a->hf.used) || !(((struct ba_block_header *)ptr)->next)) {
-	p->h = a->hf;
-	a->last_free = NULL;
-	ba_low_free(a->a, p, (struct ba_block_header *)ptr);
-    }
 }
 
 /*

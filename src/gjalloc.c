@@ -689,45 +689,61 @@ EXPORT struct ba_page * ba_get_page(struct block_allocator * a,
     return p;
 }
 
-EXPORT void ba_low_free(struct block_allocator * a, struct ba_page * p,
-			struct ba_block_header * ptr) {
-#ifdef BA_USE_VALGRIND
-    VALGRIND_MEMPOOL_FREE(a, ptr);
-    VALGRIND_MAKE_MEM_NOACCESS(ptr, a->l.block_size);
-#endif
-    if (!p->h.used) {
-	INC(free_empty);
-	DOUBLE_UNLINK(a->first, p);
-	/* reset the internal list. this avoids fragmentation which would otherwise
-	 * happen when reusing pages. Since that is cheap here, we do it.
-	 */
-	p->h.first = BA_BLOCKN(a->l, p, 0);
-#ifdef BA_USE_VALGRIND
-	VALGRIND_MAKE_MEM_DEFINED(p->h.first, sizeof(void*));
-#endif
-	p->h.first->next = BA_ONE;
-#ifdef BA_USE_VALGRIND
-	VALGRIND_MAKE_MEM_NOACCESS(p->h.first, sizeof(void*));
-#endif
-	SINGLE_LINK(a->empty, p);
-	a->empty_pages ++;
-	/*
-	 * This comparison looks strange, however the first page never gets
-	 * freed, so this is actually ok.
-	 */
-	if (a->empty_pages >= a->max_empty_pages) {
-	    ba_remove_page(a);
-	    return;
-	}
-    } else { /* page was full */
-	INC(free_full);
+static INLINE void ba_low_get_free_page(struct block_allocator * a,
+			     struct ba_page_header * h,
+			     struct ba_page ** pp,
+			     const struct ba_block_header * ptr) {
+    if (*pp) {
+	struct ba_page * p = *pp;
+
+	if (!p->h.first) {
+	    INC(free_full);
 #ifdef BA_DEBUG
-	if (p->next || p->prev) {
-	    BA_ERROR("%p should be full, but next||prev\n", p);
-	}
+	    if (p->next || p->prev) {
+		BA_ERROR("%p should be full, but next||prev\n", p);
+	    }
 #endif
-	DOUBLE_LINK(a->first, p);
+	    DOUBLE_LINK(a->first, p);
+	}
+	p->h = *h;
+	if (!h->used) {
+	    INC(free_empty);
+	    DOUBLE_UNLINK(a->first, p);
+	    /* reset the internal list. this avoids fragmentation which would otherwise
+	     * happen when reusing pages. Since that is cheap here, we do it.
+	     */
+	    p->h.first = BA_BLOCKN(a->l, p, 0);
+#ifdef BA_USE_VALGRIND
+	    VALGRIND_MAKE_MEM_DEFINED(p->h.first, sizeof(void*));
+#endif
+	    p->h.first->next = BA_ONE;
+#ifdef BA_USE_VALGRIND
+	    VALGRIND_MAKE_MEM_NOACCESS(p->h.first, sizeof(void*));
+#endif
+	    SINGLE_LINK(a->empty, p);
+	    a->empty_pages ++;
+	    /*
+	     * This comparison looks strange, however the first page never gets
+	     * freed, so this is actually ok.
+	     */
+	    if (a->empty_pages >= a->max_empty_pages) {
+		ba_remove_page(a);
+	    }
+	}
     }
+
+    *pp = ba_find_page(a, ptr);
+    *h = (*pp)->h;
+}
+
+EXPORT void ba_get_free_page(struct block_allocator * a, const void * ptr) {
+    ba_low_get_free_page(a, &a->hf, &a->last_free,
+			 (struct ba_block_header *)ptr);
+}
+
+EXPORT void ba_local_get_free_page(struct ba_local * a, const void * ptr) {
+    ba_low_get_free_page(a->a, &a->hf, &a->last_free,
+			   (struct ba_block_header *)ptr);
 }
 
 static INLINE
@@ -745,7 +761,7 @@ EXPORT struct ba_page * ba_find_page(const struct block_allocator * a,
 				     const void * ptr) {
     struct ba_page * p;
 #ifdef BA_DEBUG
-    ba_check_allocator(a, "ba_low_free", __FILE__, __LINE__);
+    ba_check_allocator(a, "ba_find_page", __FILE__, __LINE__);
 #endif
 #ifdef BA_HASH_THLD
     if (a->num_pages <= BA_HASH_THLD) {
