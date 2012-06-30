@@ -302,7 +302,7 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
     a->empty = a->first = NULL;
     a->last_free = NULL;
     a->allocated = BA_ALLOC_INITIAL;
-    memset(a->pages, 0, a->allocated * sizeof(struct ba_page));
+    memset(a->pages, 0, a->allocated * sizeof(void*));
 }
 
 EXPORT void ba_count_all(const struct block_allocator * a, size_t *num,
