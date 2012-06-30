@@ -279,6 +279,9 @@ static INLINE void ba_free_page(const struct ba_layout * l,
     if (bp)
 	BA_CMEMSET((char*)(p+1), bp, l->block_size, l->blocks);
 
+#ifdef BA_USE_VALGRIND
+    VALGRIND_MAKE_MEM_DEFINED(p->h.first, sizeof(void*));
+#endif
     p->h.first->next = BA_ONE;
 #ifdef BA_USE_VALGRIND
     VALGRIND_MAKE_MEM_NOACCESS(p+1, l->block_size * l->blocks);
