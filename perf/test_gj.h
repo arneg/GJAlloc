@@ -1,5 +1,5 @@
 #include "gjalloc.h"
-#define TEST_INIT(t)	static struct block_allocator allocator = BA_INIT(sizeof(struct t), 0)
+#define TEST_INIT(t)	static struct block_allocator allocator = BA_INIT(sizeof(struct t), 512)
 #define DYNAMIC_INIT(t)
 #define TEST_ALLOC(t)	ba_alloc(&allocator);
 #define TEST_FREE(t, p)	ba_free(&allocator, p);
