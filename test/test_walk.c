@@ -26,7 +26,9 @@ void relocate_simple(void * start, void * stop, ptrdiff_t diff) {
     }
 }
 
-void callback(struct foo * start, struct foo * stop, void * data) {
+static INLINE void callback(void * _start, void * _stop, void * data) {
+    struct foo * start = (struct foo *)_start;
+    struct foo * stop = (struct foo *)_stop;
     fprintf(stderr, "callback walking over [%llu..%llu]\n", start->n, (stop-1)->n);
 
     while (start < stop) {
