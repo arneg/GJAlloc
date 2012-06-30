@@ -290,6 +290,9 @@ static INLINE void ba_free_page(const struct ba_layout * l,
 
 EXPORT INLINE void ba_free_all(struct block_allocator * a) {
     if (!a->allocated) return;
+#ifdef BA_USE_VALGRIND
+    VALGRIND_DESTROY_MEMPOOL(a);
+#endif
 
     PAGE_LOOP(a, {
 	free(p);
@@ -303,6 +306,9 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
     a->last_free = NULL;
     a->allocated = BA_ALLOC_INITIAL;
     memset(a->pages, 0, a->allocated * sizeof(void*));
+#ifdef BA_USE_VALGRIND
+    VALGRIND_CREATE_MEMPOOL(a, 0, 0);
+#endif
 }
 
 EXPORT void ba_count_all(const struct block_allocator * a, size_t *num,
@@ -324,6 +330,10 @@ EXPORT size_t ba_count(const struct block_allocator * a) {
 }
 
 EXPORT void ba_destroy(struct block_allocator * a) {
+    if (!a->allocated) return;
+#ifdef BA_USE_VALGRIND
+    VALGRIND_DESTROY_MEMPOOL(a);
+#endif
     PAGE_LOOP(a, {
 	free(p);
     });
@@ -341,7 +351,7 @@ EXPORT void ba_destroy(struct block_allocator * a) {
     a->stats.st_max = a->stats.st_used = 0;
 #endif
 #ifdef BA_USE_VALGRIND
-    VALGRIND_DESTROY_MEMPOOL(a);
+    VALGRIND_CREATE_MEMPOOL(a, 0, 0);
 #endif
 }
 
