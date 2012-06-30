@@ -1060,10 +1060,8 @@ EXPORT void ba_lfree_all(struct ba_local * a) {
     }
 }
 
-void ba_walk_page(const struct ba_layout * l,
-		  struct ba_page * p,
-		  void (*callback)(void*,void*,void*),
-		  void * data) {
+void ba_walk_page(const struct ba_layout * l, struct ba_page * p,
+		  ba_walk_callback callback, void * data) {
 
 #define BA_CALLBACK(a, b, c)	do {	\
     ba_list_noaccess(p, p->h.first, l);	\
@@ -1077,9 +1075,8 @@ void ba_walk_page(const struct ba_layout * l,
 #undef BA_CALLBACK
 }
 
-EXPORT void ba_walk(struct block_allocator * a,
-	     void (*callback)(void*,void*,void*),
-	     void * data) {
+EXPORT void ba_walk(struct block_allocator * a, ba_walk_callback callback,
+		    void * data) {
     if (a->alloc)
 	a->alloc->h = a->h;
 
@@ -1092,9 +1089,8 @@ EXPORT void ba_walk(struct block_allocator * a,
 	a->h = a->alloc->h;
 }
 
-EXPORT void ba_walk_local(struct ba_local * a,
-	     void (*callback)(void*,void*,void*),
-	     void * data) {
+EXPORT void ba_walk_local(struct ba_local * a, ba_walk_callback callback,
+			  void * data) {
     if (a->page)
 	a->page->h = a->h;
     if (!a->a) {

@@ -238,6 +238,8 @@ struct ba_page {
     struct ba_page *hchain;
 };
 
+typedef void (*ba_walk_callback)(void*,void*,void*);
+
 /*
  * every allocator has one of these, which describe the layout of pages
  * in a way that makes calculations easy
@@ -349,7 +351,7 @@ EXPORT void ba_count_all(const struct block_allocator * a, size_t *num,
 			 size_t *size);
 EXPORT void ba_destroy(struct block_allocator * a);
 EXPORT void ba_walk(struct block_allocator * a,
-		    void (*callback)(void*,void*,void*),
+		    ba_walk_callback,
 		    void * data);
 
 #define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
@@ -652,8 +654,7 @@ EXPORT void ba_local_get_free_page(struct ba_local * a, const void * ptr);
 EXPORT size_t ba_lcount(const struct ba_local * a);
 EXPORT void ba_ldestroy(struct ba_local * a);
 EXPORT void ba_lfree_all(struct ba_local * a);
-EXPORT void ba_walk_local(struct ba_local * a,
-			  void (*callback)(void*,void*,void*), void * data);
+EXPORT void ba_walk_local(struct ba_local * a, ba_walk_callback, void * data); 
 
 static INLINE size_t ba_lcapacity(const struct ba_local * a) {
     if (a->a) {
@@ -771,8 +772,6 @@ static INLINE void * ba_talloc(struct ba_temporary * a) {
     
     return ba_shift(&a->h, a->page, &a->l);
 }
-
-typedef void (*ba_walk_callback)(void*,void*,void*);
 
 static INLINE void ba_walk_temporary(const struct ba_temporary * a,
 				     ba_walk_callback callback,
