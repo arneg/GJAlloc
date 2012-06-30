@@ -7,7 +7,7 @@
 # include <malloc.h>
 #endif
 
-#ifdef BA_DEBUG
+#if defined(BA_DEBUG) || defined(BA_USE_VALGRIND)
 /* more usable with memcheck and ba_check_allocator and probably big enoug
  * to catch bugs */
 #define M 40000
@@ -46,6 +46,7 @@ uint32_t num_pages = 0;
 size_t bytes = 0, bytes_base;
 TEST_INIT(foo);
 
+#ifdef BLOCK_ALLOCATOR_H
 void relocate_simple(void * ptr, void * stop, ptrdiff_t diff) {
     struct foo * f = (struct foo *)ptr;
 
@@ -54,6 +55,7 @@ void relocate_simple(void * ptr, void * stop, ptrdiff_t diff) {
 	ba_simple_rel_pointer(f->ptr, diff);
     }
 }
+#endif
 
 #ifndef NO_MEM_USAGE
 static inline size_t used_bytes(const struct mallinfo info) {
