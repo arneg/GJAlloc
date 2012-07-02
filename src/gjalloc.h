@@ -327,8 +327,8 @@ typedef struct block_allocator block_allocator;
 }
 
 #define BA_INIT_PAGES(block_size, page_size) \
-	BA_INIT(block_size,		     \
-	    (page_size - sizeof(struct ba_page) - MALLOC_OVERHEAD)/block_size)
+	BA_INIT((block_size),		     \
+	    ((page_size) - sizeof(struct ba_page) - MALLOC_OVERHEAD)/(block_size))
 
 EXPORT void ba_get_free_page(struct block_allocator * a, const void * ptr);
 EXPORT void ba_show_pages(const struct block_allocator * a);
