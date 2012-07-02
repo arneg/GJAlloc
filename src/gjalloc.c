@@ -304,7 +304,6 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
     a->empty_pages = 0;
     a->empty = a->first = NULL;
     a->last_free = NULL;
-    a->allocated = BA_ALLOC_INITIAL;
     memset(a->pages, 0, a->allocated * sizeof(void*));
 #ifdef BA_USE_VALGRIND
     VALGRIND_CREATE_MEMPOOL(a, 0, 0);
