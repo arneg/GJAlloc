@@ -251,7 +251,7 @@ struct ba_layout {
     uint32_t blocks;
 };
 
-#define BA_INIT_LAYOUT(block_size, blocks) { 0, block_size, blocks }
+#define BA_INIT_LAYOUT(block_size, blocks) { 0, (block_size), (blocks) }
 
 struct ba_block_header * ba_sort_list(const struct ba_page *,
 				      struct ba_block_header *,
@@ -325,6 +325,10 @@ typedef struct block_allocator block_allocator;
     NULL/*blueprint*/,\
     BA_INIT_STATS(block_size, blocks, name)\
 }
+
+#define BA_INIT_PAGES(block_size, page_size) \
+	BA_INIT(block_size,		     \
+	    (page_size - sizeof(struct ba_page) - MALLOC_OVERHEAD)/block_size)
 
 EXPORT void ba_get_free_page(struct block_allocator * a, const void * ptr);
 EXPORT void ba_show_pages(const struct block_allocator * a);
