@@ -476,7 +476,7 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
     struct ba_stats *s = &a->stats;
 #endif
 
-    if (ba_empty(&a->h)) {
+    if (unlikely(ba_empty(&a->h))) {
 #ifdef BA_DEBUG
 	if (a->alloc && a->h.used != a->l.blocks) {
 	    ba_error("page is full, but used != blocks (%u != %u)\n",
@@ -545,7 +545,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	goto DO_FREE;
     }
 
-    if (!BA_CHECK_PTR(a->l, a->last_free, ptr)) {
+    if (unlikely(!BA_CHECK_PTR(a->l, a->last_free, ptr))) {
 	ba_get_free_page(a, ptr);
     }
 
@@ -685,7 +685,7 @@ static INLINE void ba_lreserve(struct ba_local * a, uint32_t n) {
 ATTRIBUTE((malloc))
 static INLINE void * ba_lalloc(struct ba_local * a) {
 
-    if (ba_empty(&a->h)) {
+    if (unlikely(ba_empty(&a->h))) {
 #ifdef BA_DEBUG
 	if (a->page && a->h.used != a->l.blocks) {
 	    ba_error("page is full, but used != blocks (%u != %u)\n",
@@ -713,7 +713,7 @@ static INLINE void ba_lfree(struct ba_local * a, void * ptr) {
 
     t = &a->hf;
 
-    if (!BA_CHECK_PTR(a->l, a->last_free, ptr)) {
+    if (unlikely(!BA_CHECK_PTR(a->l, a->last_free, ptr))) {
 	ba_local_get_free_page(a, ptr);
     }
 
