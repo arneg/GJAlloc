@@ -677,7 +677,7 @@ static INLINE struct ba_page * ba_alloc_page(struct block_allocator * a) {
  * Get a new page from the allocator to allocate blocks from. p is the old
  * one which is full now.
  */
-EXPORT struct ba_page * ba_get_page(struct block_allocator * a,
+static INLINE struct ba_page * ba_get_page(struct block_allocator * a,
 				    struct ba_page * p) {
 
     if (p) {
@@ -699,6 +699,14 @@ EXPORT struct ba_page * ba_get_page(struct block_allocator * a,
     p->next = NULL;
 
     return p;
+}
+
+EXPORT void ba_global_get_page(struct block_allocator * a) {
+    a->alloc = ba_get_page(a, a->alloc);
+    if (a->alloc == a->last_free) {
+	a->h = a->hf;
+	a->last_free = NULL;
+    } else a->h = a->alloc->h;
 }
 
 static INLINE void ba_low_get_free_page(struct block_allocator * a,
@@ -1059,8 +1067,9 @@ EXPORT void ba_lfree_all(struct ba_local * a) {
     }
 }
 
-void ba_walk_page(const struct ba_layout * l, struct ba_page * p,
-		  ba_walk_callback callback, void * data) {
+static INLINE void ba_walk_page(const struct ba_layout * l,
+				struct ba_page * p, ba_walk_callback callback,
+				void * data) {
 
 #define BA_CALLBACK(a, b, c)	do {	\
     ba_list_noaccess(p, p->h.first, l);	\

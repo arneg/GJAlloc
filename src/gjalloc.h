@@ -338,8 +338,7 @@ EXPORT struct ba_page * ba_find_page(const struct block_allocator * a,
 				     const void * ptr);
 EXPORT void ba_remove_page(struct block_allocator * a);
 EXPORT struct ba_page * ba_low_alloc_page(const struct ba_layout * l);
-EXPORT struct ba_page * ba_get_page(struct block_allocator * a,
-				    struct ba_page * p);
+EXPORT void ba_global_get_page(struct block_allocator * a);
 #ifdef BA_DEBUG
 EXPORT void ba_print_htable(const struct block_allocator * a);
 EXPORT void ba_check_allocator(const struct block_allocator *, const char*,
@@ -484,19 +483,15 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 		     a->h.used, a->l.blocks);
 	}
 #endif
+	ba_global_get_page(a);
 
-	a->alloc = ba_get_page(a, a->alloc);
-	if (a->alloc == a->last_free) {
-	    a->h = a->hf;
-	    a->last_free = NULL;
-	} else a->h = a->alloc->h;
 #ifdef BA_DEBUG
 	if (!a->h.first) {
 	    ba_show_pages(a);
 	    BA_ERROR("a->first has no first block!\n");
 	}
 
-	ba_check_allocator(a, "after ba_get_page", __FILE__, __LINE__);
+	ba_check_allocator(a, "after ba_global_get_page", __FILE__, __LINE__);
 #endif
     }
 #ifdef BA_USE_VALGRIND
