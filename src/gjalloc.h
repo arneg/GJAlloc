@@ -294,7 +294,7 @@ struct block_allocator {
     struct ba_page_header hf;
     /* doube linked list of other pages (!free,!full,!alloc) */
     struct ba_page * first;
-    struct ba_page * * pages;
+    struct ba_page * * htable;
     struct ba_page * empty; /* single linked list of empty pages */
     uint32_t magnitude;
     uint32_t empty_pages;
@@ -315,7 +315,7 @@ typedef struct block_allocator block_allocator;
     NULL/*last_free*/,\
     BA_INIT_HEADER(),\
     NULL/*first*/,\
-    NULL/*pages*/,\
+    NULL/*htable*/,\
     NULL/*empty*/,\
     0/*magnitude*/,\
     0/*empty_pages*/,\
@@ -357,7 +357,7 @@ EXPORT void ba_walk(struct block_allocator * a,
 		    ba_walk_callback,
 		    void * data);
 
-#define BA_PAGE(a, n)   ((a)->pages[(n) - 1])
+#define BA_PAGE(a, n)   ((a)->htable[(n) - 1])
 #define BA_BLOCKN(l, p, n) ((struct ba_block_header *)(((char*)(p+1)) + (n)*((l).block_size)))
 /* Thinking about it, its not that crazy to not check for NULL. In case someone
  * passes us a ptr <= l.offset, something is broken anyway?! */
@@ -563,8 +563,8 @@ DO_FREE:
 /* goto considered harmful */
 #define LOW_PAGE_LOOP2(a, label, C...)	do {			\
     uint32_t __n;						\
-    if (a->pages) for (__n = 0; __n < a->allocated; __n++) {	\
-	struct ba_page * p = a->pages[__n];			\
+    if (a->htable) for (__n = 0; __n < a->allocated; __n++) {	\
+	struct ba_page * p = a->htable[__n];			\
 	while (p) {						\
 	    struct ba_page * t = p->hchain;			\
 	    do { C; goto SURVIVE ## label; } while(0);		\
