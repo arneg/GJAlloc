@@ -32,7 +32,7 @@ extern "C" {
 #ifdef BA_DEBUG
 #define DOUBLE_LINK(head, o)	do {		\
     if (head == o)				\
-	BA_ERROR("tryin to double_link %p to " #head " twice\n", o);	\
+	BA_ERROR(NULL, "tryin to double_link %p to " #head " twice\n", o);	\
     (o)->prev = NULL;				\
     (o)->next = head;				\
     if (head) (head)->prev = (o);		\
@@ -118,9 +118,16 @@ extern char errbuf[];
 #endif
 
 #ifdef BA_DEBUG
-# define BA_ERROR(x...)	do { fprintf(stderr, "ERROR at %s:%d\n", __FILE__, __LINE__); ba_print_htable(a); ba_show_pages(a); ba_error(x); } while(0)
+# define BA_ERROR(a, x...)	do {				\
+    fprintf(stderr, "ERROR at %s:%d\n", __FILE__, __LINE__);	\
+    if (a) {							\
+	ba_print_htable(a);					\
+	ba_show_pages(a);					\
+    }								\
+    ba_error(x);						\
+} while(0)
 #else
-# define BA_ERROR(x...)	do { ba_error(x); } while(0)
+# define BA_ERROR(a, x...)	do { ba_error(x); } while(0)
 #endif
 
 #if SIZEOF_LONG == 8 || SIZEOF_LONG_LONG == 8
@@ -431,6 +438,13 @@ static INLINE struct ba_block_header * ba_shift(struct ba_page_header * h,
 						const struct ba_layout * l) {
     struct ba_block_header * ptr = h->first;
 
+#ifdef BA_DEBUG
+    if (ptr < BA_BLOCKN(*l, p, 0) || ptr > BA_LASTBLOCK(*l, p)) {
+	BA_ERROR(NULL, "about to allocate block %p outside of page %p[%p-%p].\n",
+		 ptr, p, BA_BLOCKN(*l, p, 0), BA_LASTBLOCK(*l, p));
+    }
+#endif
+
 #ifdef BA_USE_VALGRIND
     VALGRIND_MAKE_MEM_DEFINED(ptr, sizeof(void*));
 #endif
@@ -504,7 +518,7 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
 #ifdef BA_DEBUG
 	if (!a->h.first) {
 	    ba_show_pages(a);
-	    BA_ERROR("a->first has no first block!\n");
+	    BA_ERROR(a, "a->first has no first block!\n");
 	}
 
 	ba_check_allocator(a, "after ba_global_get_page", __FILE__, __LINE__);
@@ -538,6 +552,17 @@ static INLINE void * ba_alloc(struct block_allocator * a) {
     return ptr;
 }
 
+static INLINE void ba_check_belongs(struct ba_page * p, struct ba_layout * l,
+				    void * _ptr) {
+#ifdef BA_DEBUG
+    struct ba_block_header * ptr = (struct ba_block_header *)_ptr;
+    if (ptr < BA_BLOCKN(*l, p, 0) || ptr > BA_LASTBLOCK(*l, p)) {
+	BA_ERROR(NULL, " block %p outside of page %p[%p-%p].\n",
+		 ptr, p, BA_BLOCKN(*l, p, 0), BA_LASTBLOCK(*l, p));
+    }
+#endif
+}
+
 
 static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     struct ba_page_header * t;
@@ -548,7 +573,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 
 #ifdef BA_DEBUG
     if (a->empty_pages == a->num_pages) {
-	BA_ERROR("we did it!\n");
+	BA_ERROR(a, "we did it!\n");
     }
 #endif
 
@@ -556,6 +581,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
     a->stats.st_used--;
 #endif
     if ((BA_CHECK_PTR(a->l, a->alloc, ptr))) {
+	ba_check_belongs(a->alloc, &a->l, ptr);
 	INC(free_fast1);
 	t = &a->h;
 	goto DO_FREE;
@@ -565,6 +591,7 @@ static INLINE void ba_free(struct block_allocator * a, void * ptr) {
 	ba_get_free_page(a, ptr);
     }
 
+    ba_check_belongs(a->last_free, &a->l, ptr);
     t = &a->hf;
 DO_FREE:
     ba_unshift(t, (struct ba_block_header*)ptr);

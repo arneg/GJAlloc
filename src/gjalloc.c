@@ -162,7 +162,7 @@ static INLINE void * ba_xrealloc(void * p, const size_t size) {
 EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 		    uint32_t blocks) {
 
-    if (!block_size) BA_ERROR("ba_init called with zero block_size\n");
+    if (!block_size) BA_ERROR(a, "ba_init called with zero block_size\n");
 
     if (block_size < sizeof(struct ba_block_header)) {
 	block_size = sizeof(struct ba_block_header);
@@ -359,7 +359,7 @@ static INLINE void ba_grow(struct block_allocator * a) {
     if (a->allocated) {
 	/* try to detect 32bit overrun? */
 	if (a->allocated >= ((uint32_t)1 << (sizeof(uint32_t)*8-1))) {
-	    BA_ERROR("too many pages.\n");
+	    BA_ERROR(a, "too many pages.\n");
 	}
 	ba_htable_grow(a);
     } else {
@@ -489,7 +489,7 @@ static INLINE void ba_htable_insert(const struct block_allocator * a,
 	if (*b == p) {
 	    fprintf(stderr, "inserting (%p) twice\n", p);
 	    fprintf(stderr, "is (%p)\n", *b);
-	    BA_ERROR("double insert.\n");
+	    BA_ERROR(a, "double insert.\n");
 	    return;
 	}
 	b = &(*b)->hchain;
@@ -528,7 +528,7 @@ static INLINE void ba_htable_replace(const struct block_allocator * a,
     fprintf(stderr, "ba_htable_replace(%p, %u, %u)\n", ptr, n, new);
     fprintf(stderr, "hval: %u, %u, %u\n", hval, hval & BA_HASH_MASK(a), BA_HASH_MASK(a));
     ba_print_htable(a);
-    BA_ERROR("did not find index to replace.\n")
+    BA_ERROR(a, "did not find index to replace.\n")
 #endif
 }
 #endif
@@ -549,7 +549,7 @@ static INLINE void ba_htable_delete(const struct block_allocator * a,
 #ifdef DEBUG
     ba_print_htable(a);
     fprintf(stderr, "ba_htable_delete(%p, %u)\n", p, n);
-    BA_ERROR("did not find index to delete.\n")
+    BA_ERROR(a, "did not find index to delete.\n")
 #endif
 }
 
@@ -637,7 +637,7 @@ EXPORT INLINE void ba_check_allocator(const struct block_allocator * a,
 	ba_show_pages(a);
 	fprintf(stderr, "\nCalled from %s:%d:%s\n", fun, line, file);
 	fprintf(stderr, "pages: %u\n", a->num_pages);
-	BA_ERROR("bad");
+	BA_ERROR(a, "bad");
     }
 }
 #endif
@@ -668,6 +668,8 @@ static INLINE struct ba_page * ba_alloc_page(struct block_allocator * a) {
     p->next = p->prev = NULL;
     ba_htable_insert(a, p);
 #ifdef BA_DEBUG
+    fprintf(stderr, "allocated page %p[%p-%p].\n",
+	    p, BA_BLOCKN(a->l, p, 0), BA_LASTBLOCK(a->l, p));
     ba_check_allocator(a, "ba_alloc after insert.", __FILE__, __LINE__);
 #endif
 
@@ -822,7 +824,7 @@ EXPORT struct ba_page * ba_find_page(const struct block_allocator * a,
 	    );
     ba_print_htable(a);
 #endif
-    BA_ERROR("Unknown pointer (not found in hash) %lx\n", (long int)ptr);
+    BA_ERROR(a, "Unknown pointer (not found in hash) %lx\n", (long int)ptr);
 }
 
 EXPORT void ba_remove_page(struct block_allocator * a) {
@@ -845,10 +847,10 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 #ifdef BA_DEBUG
     ba_check_allocator(a, "ba_remove_page", __FILE__, __LINE__);
     if (a->empty_pages < a->max_empty_pages) {
-	BA_ERROR("strange things happening\n");
+	BA_ERROR(a, "strange things happening\n");
     }
     if (p == a->pages[0] || p == a->pages[1]) {
-	BA_ERROR("removing first page. this is not supposed to happen\n");
+	BA_ERROR(a, "removing first page. this is not supposed to happen\n");
     }
 #endif
 
