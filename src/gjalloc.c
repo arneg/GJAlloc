@@ -558,21 +558,20 @@ struct ba_page * ba_htable_lookup(const struct block_allocator * a,
 				  const void * ptr) {
     struct ba_page * p;
     uint32_t h[2];
-    unsigned char c, b = 0;
+    int b;
     h[0] = hash1(a, ptr);
     h[1] = hash2(a, ptr);
 
-    c = ((uintptr_t)ptr >> (a->magnitude - 1)) & 1;
+    b = (h[0] == h[1]);
 
 LOOKUP:
-    p = a->htable[h[c] & BA_HASH_MASK(a)];
+    p = a->htable[h[b] & BA_HASH_MASK(a)];
     while (p) {
 	if (BA_CHECK_PTR(a->l, p, ptr)) {
 	    return p;
 	}
 	p = p->hchain;
     }
-    c = !c;
     if (!(b++)) goto LOOKUP;
     return NULL;
 }
