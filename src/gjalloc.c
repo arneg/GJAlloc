@@ -55,8 +55,9 @@ EXPORT void ba_show_pages(const struct block_allocator * a) {
     fprintf(stderr, "empty_pages: %u\n", a->empty_pages);
     fprintf(stderr, "magnitude: %u\n", a->magnitude);
     PRINT_NODE(a, alloc);
-    PRINT_LIST(a, empty);
-    PRINT_LIST(a, first);
+    PRINT_LIST(a, pages[0]);
+    PRINT_LIST(a, pages[1]);
+    PRINT_LIST(a, pages[2]);
     PRINT_NODE(a, last_free);
 
     a->alloc->h = a->h;
@@ -172,7 +173,7 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
     ba_init_layout(&a->l, block_size, blocks);
     ba_align_layout(&a->l);
 
-    a->empty = a->first = NULL;
+    a->pages[0] = a->pages[1] = a->pages[2] = NULL;
     a->last_free = NULL;
     a->alloc = NULL;
     a->h.first = NULL;
@@ -302,7 +303,7 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
     a->alloc = NULL;
     a->num_pages = 0;
     a->empty_pages = 0;
-    a->empty = a->first = NULL;
+    a->pages[0] = a->pages[1] = a->pages[2] = NULL;
     a->last_free = NULL;
     memset(a->htable, 0, a->allocated * sizeof(void*));
 #ifdef BA_USE_VALGRIND
@@ -343,7 +344,7 @@ EXPORT void ba_destroy(struct block_allocator * a) {
     a->last_free = NULL;
     a->allocated = 0;
     a->htable = NULL;
-    a->empty = a->first = NULL;
+    a->pages[0] = a->pages[1] = a->pages[2] = NULL;
     a->empty_pages = 0;
     a->num_pages = 0;
 #ifdef BA_STATS
@@ -679,6 +680,7 @@ static INLINE struct ba_page * ba_alloc_page(struct block_allocator * a) {
  */
 static INLINE struct ba_page * ba_get_page(struct block_allocator * a,
 				    struct ba_page * p) {
+    struct ba_page ** b = a->pages;
 
     if (p) {
 	p->h.first = NULL;
@@ -686,12 +688,17 @@ static INLINE struct ba_page * ba_get_page(struct block_allocator * a,
 	p->h.flags = BA_FLAG_SORTED;
     }
 
-    if (a->first) {
-	p = a->first;
-	DOUBLE_SHIFT(a->first);
-    } else if (a->empty) {
-	p = a->empty;
-	SINGLE_SHIFT(a->empty);
+    // we try a->pages[0] first, to keep defragmentation
+    // low. this might hit performance, by allocating from almost
+    // full pages first.
+    b += !*b;
+
+    if (*b) {
+	p = *b;
+	DOUBLE_SHIFT(*b);
+    } else if (*(++b)) {
+	p = *b;
+	DOUBLE_SHIFT(*b);
 	a->empty_pages--;
     } else {
 	p = ba_alloc_page(a);
@@ -701,12 +708,55 @@ static INLINE struct ba_page * ba_get_page(struct block_allocator * a,
     return p;
 }
 
+static void ba_update_slot(struct block_allocator * a,
+				  struct ba_page * p,
+				  struct ba_page_header * h) {
+    struct ba_page ** oslot, ** nslot;
+    oslot = ba_get_slot(a, &p->h);
+    nslot = ba_get_slot(a, h);
+
+    if (oslot == nslot) return;
+
+    if (oslot) DOUBLE_UNLINK(*oslot, p);
+    if (nslot) DOUBLE_LINK(*nslot, p);
+
+    /*
+     * page is empty, so we have to treat is specially
+     */
+    if (!h->used) {
+	INC(free_empty);
+	a->empty_pages ++;
+
+	/* reset the internal list. this avoids fragmentation which would
+	 * otherwise happen when reusing pages. Since that is cheap here,
+	 * we do it.
+	 */
+	h->first = BA_BLOCKN(a->l, p, 0);
+#ifdef BA_USE_VALGRIND
+	VALGRIND_MAKE_MEM_DEFINED(h->first, sizeof(void*));
+#endif
+	h->first->next = BA_ONE;
+#ifdef BA_USE_VALGRIND
+	VALGRIND_MAKE_MEM_NOACCESS(h->first, sizeof(void*));
+#endif
+	p->h = * h;
+	/*
+	 * This comparison looks strange, however the first page never gets
+	 * freed, so this is actually ok.
+	 */
+	if (a->empty_pages >= a->max_empty_pages) {
+	    ba_remove_page(a);
+	}
+    } else p->h = * h;
+}
+
 EXPORT void ba_global_get_page(struct block_allocator * a) {
     a->alloc = ba_get_page(a, a->alloc);
     if (a->alloc == a->last_free) {
-	a->h = a->hf;
+	ba_update_slot(a, a->last_free, &a->hf);
 	a->last_free = NULL;
-    } else a->h = a->alloc->h;
+    }
+    a->h = a->alloc->h;
 }
 
 static INLINE void ba_low_get_free_page(struct block_allocator * a,
@@ -716,40 +766,7 @@ static INLINE void ba_low_get_free_page(struct block_allocator * a,
     if (*pp) {
 	struct ba_page * p = *pp;
 
-	if (!p->h.first) {
-	    INC(free_full);
-#ifdef BA_DEBUG
-	    if (p->next || p->prev) {
-		BA_ERROR("%p should be full, but next||prev\n", p);
-	    }
-#endif
-	    DOUBLE_LINK(a->first, p);
-	}
-	p->h = *h;
-	if (!h->used) {
-	    INC(free_empty);
-	    DOUBLE_UNLINK(a->first, p);
-	    /* reset the internal list. this avoids fragmentation which would otherwise
-	     * happen when reusing pages. Since that is cheap here, we do it.
-	     */
-	    p->h.first = BA_BLOCKN(a->l, p, 0);
-#ifdef BA_USE_VALGRIND
-	    VALGRIND_MAKE_MEM_DEFINED(p->h.first, sizeof(void*));
-#endif
-	    p->h.first->next = BA_ONE;
-#ifdef BA_USE_VALGRIND
-	    VALGRIND_MAKE_MEM_NOACCESS(p->h.first, sizeof(void*));
-#endif
-	    SINGLE_LINK(a->empty, p);
-	    a->empty_pages ++;
-	    /*
-	     * This comparison looks strange, however the first page never gets
-	     * freed, so this is actually ok.
-	     */
-	    if (a->empty_pages >= a->max_empty_pages) {
-		ba_remove_page(a);
-	    }
-	}
+	ba_update_slot(a, p, h);
     }
 
     *pp = ba_find_page(a, ptr);
@@ -809,29 +826,28 @@ EXPORT struct ba_page * ba_find_page(const struct block_allocator * a,
 }
 
 EXPORT void ba_remove_page(struct block_allocator * a) {
-    struct ba_page * p;
-    struct ba_page ** c = &(a->empty), ** max = c;
+    struct ba_page * t, * p;
+
+    p = t = a->pages[2];
 
     /* I am not sure if this really helps. It should, by removing the
      * page which is highest in memory, potentially help malloc lower
      * the break.
      */
-    while (*c) {
-	if (*c > *max) {
-	    max = c;
-	}
-	c = &((*c)->next);
-    }
+    do {
+	if (t > p) p = t;
 
-    p = *max;
-    *max = (*max)->next;
+	t = t->next;
+    } while (t);
+
+    DOUBLE_UNLINK(a->pages[2], p);
 
 #ifdef BA_DEBUG
     ba_check_allocator(a, "ba_remove_page", __FILE__, __LINE__);
     if (a->empty_pages < a->max_empty_pages) {
 	BA_ERROR("strange things happening\n");
     }
-    if (p == a->first) {
+    if (p == a->pages[0] || p == a->pages[1]) {
 	BA_ERROR("removing first page. this is not supposed to happen\n");
     }
 #endif
@@ -850,9 +866,6 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 
 #ifdef BA_DEBUG
     memset(p, 0, sizeof(struct ba_page));
-    if (a->first == p) {
-	fprintf(stderr, "a->first will be old removed page %p\n", a->first);
-    }
 #endif
 
     a->empty_pages--;
@@ -1026,9 +1039,10 @@ EXPORT void ba_local_get_page(struct ba_local * a) {
 	/* get page from allocator */
 	a->page = ba_get_page(a->a, a->page);
 	if (a->page == a->last_free) {
-	    a->h = a->hf;
+	    ba_update_slot(a->a, a->last_free, &a->hf);
 	    a->last_free = NULL;
-	} else a->h = a->page->h;
+	}
+	a->h = a->page->h;
     } else {
 	if (a->page) {
 	    /* double the size */
@@ -1088,11 +1102,15 @@ EXPORT void ba_walk(struct block_allocator * a, ba_walk_callback callback,
     if (a->alloc)
 	a->alloc->h = a->h;
 
+    if (a->last_free) ba_update_slot(a, a->last_free, &a->hf);
+
     PAGE_LOOP(a, {
 	if (p->h.used)
 	    ba_walk_page(&a->l, p, callback, data);
     });
 
+    if (a->last_free)
+	a->hf = a->last_free->h;
     if (a->alloc)
 	a->h = a->alloc->h;
 }
@@ -1104,7 +1122,11 @@ EXPORT void ba_walk_local(struct ba_local * a, ba_walk_callback callback,
     if (!a->a) {
 	if (a->page)
 	    ba_walk_page(&a->l, a->page, callback, data);
-    } else ba_walk(a->a, callback, data);
+    } else {
+	if (a->last_free) ba_update_slot(a->a, a->last_free, &a->hf);
+	ba_walk(a->a, callback, data);
+	if (a->last_free) a->hf = a->last_free->h;
+    }
     if (a->page)
 	a->h = a->page->h;
 }
@@ -1282,13 +1304,15 @@ in_row:
  * the only thing we can do here is to clear empty pages
  */
 EXPORT void ba_shrink(struct block_allocator * a) {
-    if (a->empty) {
+    struct ba_page * p = a->pages[2];
+    if (p) {
+	a->pages[2] = NULL;
 	do {
-	    struct ba_page * p = a->empty;
-	    SINGLE_SHIFT(a->empty);
+	    struct ba_page * t = p->next;
 	    ba_htable_delete(a, p);
 	    free(p);
-	} while (a->empty);
+	    p = t;
+	} while (p);
 
 	a->num_pages -= a->empty_pages;
 	a->empty_pages = 0;

@@ -292,10 +292,16 @@ struct block_allocator {
     struct ba_page * alloc;
     struct ba_page * last_free;
     struct ba_page_header hf;
-    /* doube linked list of other pages (!free,!full,!alloc) */
-    struct ba_page * first;
+    /* doube linked list of other pages (!full,!alloc)
+     * order may be different, depending on ba_get_slot
+     * pages[0] contains pages filled >= 50%
+     * pages[1]			      <  50%
+     * pages[2]	contains all empty pages
+     *
+     * this is used for defragmentation.
+     */
+    struct ba_page * pages[3];
     struct ba_page * * htable;
-    struct ba_page * empty; /* single linked list of empty pages */
     uint32_t magnitude;
     uint32_t empty_pages;
     uint32_t max_empty_pages;
@@ -307,6 +313,17 @@ struct block_allocator {
 #endif
 };
 
+static INLINE struct ba_page ** ba_get_slot(struct block_allocator * a,
+					    struct ba_page_header * h) {
+    const uint32_t th = a->l.blocks >> 1;
+    if (!h->first) return NULL;
+#ifdef BA_ALLOC_FROM_FULL
+    return a->pages + (h->used < th) + !h->used;
+#else
+    return a->pages + (h->used >= th) + 2 * (!h->used);
+#endif
+}
+
 typedef struct block_allocator block_allocator;
 #define BA_INIT(block_size, blocks, name...) {\
     BA_INIT_LAYOUT(block_size, blocks),\
@@ -314,9 +331,8 @@ typedef struct block_allocator block_allocator;
     NULL/*alloc*/,\
     NULL/*last_free*/,\
     BA_INIT_HEADER(),\
-    NULL/*first*/,\
+    { NULL, NULL, NULL }/*pages[2]*/,\
     NULL/*htable*/,\
-    NULL/*empty*/,\
     0/*magnitude*/,\
     0/*empty_pages*/,\
     BA_MAX_EMPTY/*max_empty_pages*/,\
