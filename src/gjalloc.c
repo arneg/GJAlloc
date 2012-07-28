@@ -63,7 +63,10 @@ EXPORT void ba_show_pages(const struct block_allocator * a) {
     PRINT_LIST(a, pages[2]);
     PRINT_NODE(a, last_free);
 
-    a->alloc->h = a->h;
+    /*
+     * TODO: we should consider updating alloc/last_free here
+     */
+
     PAGE_LOOP(a, {
 	uint32_t blocks_used;
 	blocks_used = p->h.used;
@@ -319,17 +322,21 @@ EXPORT INLINE void ba_free_all(struct block_allocator * a) {
 #endif
 }
 
-EXPORT void ba_count_all(const struct block_allocator * a, size_t *num,
+EXPORT void ba_count_all(struct block_allocator * a, size_t *num,
 			 size_t *size) {
     /* fprintf(stderr, "page_size: %u, pages: %u\n", BA_PAGESIZE(a->l), a->num_pages); */
     *size = BA_BYTES(a) + a->num_pages * BA_PAGESIZE(a->l);
     *num = ba_count(a);
 }
 
-EXPORT size_t ba_count(const struct block_allocator * a) {
+EXPORT size_t ba_count(struct block_allocator * a) {
     size_t n = 0;
 
     if (a->alloc) a->alloc->h = a->h;
+    if (a->last_free) {
+	ba_update_slot(a, a->last_free, &a->hf);
+	a->last_free = NULL;
+    }
 
     PAGE_LOOP(a, {
 	n += p->h.used;
@@ -870,7 +877,7 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
  * Here come local allocator definitions
  */
 
-EXPORT size_t ba_lcount(const struct ba_local * a) {
+EXPORT size_t ba_lcount(struct ba_local * a) {
     if (a->a) {
 	if (a->page) a->page->h = a->h;
 	return ba_count(a->a);
