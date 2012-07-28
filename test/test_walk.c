@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stddef.h>
 
-#define N 64
+#define N 15000
 
 struct foo {
     unsigned long long n;
@@ -29,7 +29,7 @@ void relocate_simple(void * start, void * stop, ptrdiff_t diff) {
 static INLINE void callback(void * _start, void * _stop, void * data) {
     struct foo * start = (struct foo *)_start;
     struct foo * stop = (struct foo *)_stop;
-    fprintf(stderr, "callback walking over [%llu..%llu]\n", start->n, (stop-1)->n);
+    fprintf(stderr, "callback walking over [%p..%p]\n", start, (stop-1));
 
     while (start < stop) {
 //	fprintf(stderr, "is there: %llu\n", (unsigned long long)start->n);
@@ -64,10 +64,18 @@ int main() {
 #ifdef TEST_FREE
     list[5]->free = 1;
     list[7]->free = 1;
-    TEST_FREE(&a, list[5]);
-    TEST_FREE(&a, list[7]);
+    TEST_FREE(foo, list[5]);
+    TEST_FREE(foo, list[7]);
 #endif
-    TEST_WALK(&a, callback, NULL);
+#ifdef TEST_WALK
+    TEST_WALK(foo, callback, NULL);
+    for (i = 0; i < N; i++) {
+	if (!(list[i]->trigger || list[i]->free)) {
+	    fprintf(stderr, "block %llu is neither free nor walked\n",
+		    (unsigned long long)i);
+	}
+    }
+#endif
 
     TEST_DEINIT(foo);
     free(list);
