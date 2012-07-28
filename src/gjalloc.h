@@ -194,7 +194,7 @@ static INLINE size_t bv_ctz(struct bitvector * bv, size_t n) {
     bv_int_t V = *_v & (~BV_NIL << bit);
 
 #ifdef BA_DEBUG
-    bv_print(bv);
+    //bv_print(bv);
 #endif
 
     bit = c * BV_LENGTH;
