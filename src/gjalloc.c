@@ -1231,11 +1231,10 @@ EXPORT void ba_defragment_page(const struct ba_layout *l,
  * merges page p2 into page p1.
  */
 EXPORT void ba_merge_pages(const struct ba_layout *l,
-			   struct ba_page_header *h1,
-			   struct ba_page * p1,
-			   struct ba_page_header *h2,
-			   struct ba_page * p2,
-			   void (*relocate)(void*, void*, size_t)) {
+			   struct ba_page * p1, struct ba_page * p2,
+			   ba_relocation_callback relocate) {
+    struct ba_page_header *h1 = &p1->h;
+    struct ba_page_header *h2 = &p2->h;
     struct ba_block_header * free_block = h1->first;
 
     if (!(h1->flags & BA_FLAG_SORTED)) {
@@ -1327,11 +1326,52 @@ EXPORT void ba_shrink(struct block_allocator * a) {
     }
 }
 
-EXPORT void ba_ldefragment(struct ba_local * a, size_t capacity) {
-    if (a->a) {
+EXPORT void ba_defragment(struct block_allocator * a, size_t capacity,
+			  ba_relocation_callback relocate) {
+    struct ba_page *p1, *p2;
 
-	ba_shrink(a->a);
-	if (ba_capacity(a->a) <= capacity) return;
+    ba_shrink(a);
+
+    if (ba_capacity(a) <= capacity) return;
+
+    if (a->last_free) {
+	ba_update_slot(a, a->last_free, &a->hf);
+	a->last_free = NULL;
+    }
+
+    /*
+     * this merges all pages that are less than 50% full
+     */
+    while ((p1 = a->pages[BA_SLOT_LOW]) && (p2 = p1->next)) {
+	ba_merge_pages(&a->l, p1, p2, relocate);
+
+	/* p2 is empty now */
+	DOUBLE_UNLINK(a->pages[BA_SLOT_LOW], p2);
+	ba_htable_delete(a, p2);
+	a->num_pages--;
+	free(p2);
+
+	/* move p1 to other slot */
+	if (ba_is_high(&a->l, &p1->h)) {
+	    DOUBLE_SHIFT(a->pages[BA_SLOT_LOW]);
+	    DOUBLE_LINK(a->pages[BA_SLOT_HIGH], p1);
+	}
+
+	if (ba_capacity(a) <= capacity) return;
+    }
+}
+
+EXPORT void ba_ldefragment(struct ba_local * a, size_t capacity,
+			   ba_relocation_callback relocate) {
+    if (a->a) {
+	if (a->last_free) {
+	    ba_update_slot(a->a, a->last_free, &a->hf);
+	    a->last_free = NULL;
+	}
+
+	ba_defragment(a->a, capacity, relocate);
+    } else {
+	/* TODO: defragment the page and possibly shrink it */
     }
 }
 

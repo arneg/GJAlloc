@@ -321,16 +321,29 @@ struct block_allocator {
 #endif
 };
 
+static INLINE int ba_is_low(struct ba_layout * l, struct ba_page_header * h) {
+    const uint32_t th = l->blocks >> 1;
+    return h->used < th;
+}
+
+static INLINE int ba_is_high(struct ba_layout * l, struct ba_page_header * h) {
+    const uint32_t th = l->blocks >> 1;
+    return h->first && h->used >= th;
+}
+
 static INLINE struct ba_page ** ba_get_slot(struct block_allocator * a,
 					    struct ba_page_header * h) {
     const uint32_t th = a->l.blocks >> 1;
     if (!h->first) return NULL;
 #ifdef BA_ALLOC_FROM_FULL
+# define BA_SLOT_HIGH 0
     return a->pages + (h->used < th) + !h->used;
 #else
+# define BA_SLOT_HIGH 1
     return a->pages + (h->used >= th) + 2 * (!h->used);
 #endif
 }
+# define BA_SLOT_LOW (!BA_SLOT_HIGH)
 
 typedef struct block_allocator block_allocator;
 #define BA_INIT(block_size, blocks, name...) {\
@@ -339,7 +352,7 @@ typedef struct block_allocator block_allocator;
     NULL/*alloc*/,\
     NULL/*last_free*/,\
     BA_INIT_HEADER(),\
-    { NULL, NULL, NULL }/*pages[2]*/,\
+    { NULL, NULL, NULL }/*pages[3]*/,\
     NULL/*htable*/,\
     0/*magnitude*/,\
     0/*empty_pages*/,\
