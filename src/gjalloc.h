@@ -443,7 +443,7 @@ static INLINE void ba_unshift(struct ba_page_header * h,
     b->next = h->first;
     h->first = b;
     h->used --;
-    if (b > b->next) h->flags &= ~BA_FLAG_SORTED;
+    if (b->next && b > b->next) h->flags &= ~BA_FLAG_SORTED;
 }
 
 ATTRIBUTE((malloc))
