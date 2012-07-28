@@ -246,7 +246,7 @@ struct ba_page {
 };
 
 typedef void (*ba_walk_callback)(void*,void*,void*);
-typedef void (*ba_relocation_callback)(void*,void*,size_t);
+typedef void (*ba_relocation_callback)(void*,void*,size_t,void*);
 
 /*
  * every allocator has one of these, which describe the layout of pages
@@ -393,8 +393,9 @@ EXPORT void ba_destroy(struct block_allocator * a);
 EXPORT void ba_walk(struct block_allocator * a,
 		    ba_walk_callback,
 		    void * data);
+EXPORT void ba_defragment(struct block_allocator * a, size_t capacity,
+			  ba_relocation_callback relocate, void * data);
 
-#define BA_PAGE(a, n)   ((a)->htable[(n) - 1])
 #define BA_BLOCKN(l, p, n) ((struct ba_block_header *)(((char*)(p+1)) + (n)*((l).block_size)))
 /* Thinking about it, its not that crazy to not check for NULL. In case someone
  * passes us a ptr <= l.offset, something is broken anyway?! */
@@ -711,6 +712,9 @@ EXPORT size_t ba_lcount(const struct ba_local * a);
 EXPORT void ba_ldestroy(struct ba_local * a);
 EXPORT void ba_lfree_all(struct ba_local * a);
 EXPORT void ba_walk_local(struct ba_local * a, ba_walk_callback, void * data); 
+EXPORT void ba_ldefragment(struct ba_local * a, size_t capacity,
+			   ba_relocation_callback, void *data);
+
 
 static INLINE size_t ba_lcapacity(const struct ba_local * a) {
     if (a->a) {

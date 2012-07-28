@@ -22,6 +22,9 @@ EXPORT char errbuf[128];
 static INLINE void ba_htable_insert(const struct block_allocator * a,
 				    struct ba_page * ptr);
 static INLINE void ba_htable_grow(struct block_allocator * a);
+static void ba_update_slot(struct block_allocator * a,
+			   struct ba_page * p,
+			   struct ba_page_header * h);
 
 #define BA_NBLOCK(l, p, ptr)	((uintptr_t)((char*)(ptr) - (char*)((p)+1))/(uintptr_t)((l).block_size))
 
@@ -213,14 +216,19 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 #endif
 }
 
+static INLINE void ba_sort(struct ba_page * p, struct ba_page_header * h,
+			   const struct ba_layout * l) {
+    if (!(h->flags & BA_FLAG_SORTED)) {
+	h->first = ba_sort_list(p, h->first, l);
+	h->flags |= BA_FLAG_SORTED;
+    }
+}
+
 #define BA_WALK_CHUNKS3(p, h, l, label, C...)  do {			\
     struct ba_page_header * _h = (h);					\
     const struct ba_layout * _l = (l);					\
     char * _start, * _stop;						\
-    if (!(_h->flags & BA_FLAG_SORTED)) {				\
-	_h->first = ba_sort_list(p, _h->first, _l);			\
-	_h->flags |= BA_FLAG_SORTED;					\
-    }									\
+    ba_sort(p, _h, _l);							\
     ba_list_defined(p, _h->first, _l);					\
     _start = (char*)BA_BLOCKN(*_l, (p), 0);				\
     if (!_h->first) {							\
@@ -1135,7 +1143,7 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
     while (b) {
 	uintptr_t n = BA_NBLOCK(*l, p, b);
 #ifdef BA_DEBUG
-	fprintf(stderr, "block %llu is free\n", (long long unsigned)n);
+	//fprintf(stderr, "block %llu is free\n", (long long unsigned)n);
 #endif
 	bv_set(&v, n, 1);
 	if (b->next == BA_ONE) {
@@ -1145,7 +1153,7 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
     }
 
 #ifdef BA_DEBUG
-    bv_print(&v);
+    //bv_print(&v);
 #endif
 
     /*
@@ -1159,7 +1167,7 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
     }
 
 #ifdef BA_DEBUG
-    bv_print(&v);
+    //bv_print(&v);
 #endif
 
     j = 0;
@@ -1192,12 +1200,9 @@ struct ba_block_header * ba_sort_list(const struct ba_page * p,
 EXPORT void ba_defragment_page(const struct ba_layout *l,
 			       struct ba_page_header * h,
 			       struct ba_page * p,
-			       void (*relocate)(void*, void*, size_t)) {
+			       ba_relocation_callback relocate) {
 
-    if (!(h->flags & BA_FLAG_SORTED)) {
-	h->first = ba_sort_list(p, h->first, l);
-	h->flags |= BA_FLAG_SORTED;
-    }
+    ba_sort(p, h, l);
     /* TODO */
 }
 
@@ -1206,32 +1211,38 @@ EXPORT void ba_defragment_page(const struct ba_layout *l,
  */
 EXPORT void ba_merge_pages(const struct ba_layout *l,
 			   struct ba_page * p1, struct ba_page * p2,
-			   ba_relocation_callback relocate) {
+			   ba_relocation_callback relocate, void * data) {
     struct ba_page_header *h1 = &p1->h;
     struct ba_page_header *h2 = &p2->h;
-    struct ba_block_header * free_block = h1->first;
+    struct ba_block_header * free_block;
 
-    if (!(h1->flags & BA_FLAG_SORTED)) {
-	free_block = ba_sort_list(p1, free_block, l);
-	h1->flags |= BA_FLAG_SORTED;
-    }
+    ba_sort(p1, h1, l);
+
+    free_block = h1->first;
+
+    ba_list_defined(p1, free_block, l);
 
     if (h1->used + h2->used > l->blocks) {
 	ba_error("Cannot merge %p and %p\n", p1, p2);
     }
 #ifdef BA_USE_VALGRIND
-# define BA_VALGRIND_MOVE_CHUNK(src, dst, bytes) do {		    \
+# define BA_RELOCATE_CHUNK(dst, src, bytes) do {		    \
     char * tsrc = (char*)(src);					    \
     char * tdst = (char*)(dst);					    \
-    char * tstop = tsrc + (bytes);				    \
-    while (tsrc < tstop) {					    \
-	VALGRIND_MEMPOOL_CHANGE(l, tsrc, tdst, l->block_size);	    \
-	tsrc += l->block_size;					    \
-	tdst += l->block_size;					    \
+    ptrdiff_t offset;						    \
+    for (offset = 0; offset < bytes; offset += l->block_size) {	    \
+	VALGRIND_MEMPOOL_ALLOC(l, tdst+offset, l->block_size);	    \
+    }								    \
+    relocate(dst, src, bytes, data);				    \
+    for (offset = 0; offset < bytes; offset += l->block_size) {	    \
+	VALGRIND_MAKE_MEM_NOACCESS(tsrc+offset, l->block_size);	    \
+	VALGRIND_MEMPOOL_FREE(l, tsrc+offset);			    \
     }								    \
 } while(0)
 #else
-# define BA_VALGRIND_MOVE_CHUNK(src, dst, bytes) do { } while(0)
+# define BA_RELOCATE_CHUNK(dst, src, bytes) do {		    \
+    relocate(dst, src, bytes, data);				    \
+} while(0)
 #endif
 
     BA_WALK_CHUNKS(p2, h2, l, {
@@ -1241,8 +1252,8 @@ EXPORT void ba_merge_pages(const struct ba_layout *l,
 
 	if (free_block->next == BA_ONE) {
 in_row:
-	    relocate(start, free_block, (size_t)bytes);
-	    BA_VALGRIND_MOVE_CHUNK(start, free_block, bytes);
+	    BA_RELOCATE_CHUNK(free_block, start, bytes);
+
 	    free_block = (struct ba_block_header*)((char*)free_block + bytes);
 	    free_block->next = BA_ONE;
 	} else do {
@@ -1258,8 +1269,7 @@ in_row:
 	    if (tmp->next == BA_ONE) goto in_row;
 
 	    tmp = tmp->next;
-	    relocate(start, free_block, free_bytes);
-	    BA_VALGRIND_MOVE_CHUNK(start, free_block, bytes);
+	    BA_RELOCATE_CHUNK(free_block, start, free_bytes);
 	    start += free_bytes;
 	    bytes -= free_bytes;
 	    free_block = tmp;
@@ -1273,6 +1283,7 @@ in_row:
     } else {
 	h1->first = free_block;
     }
+    ba_list_noaccess(p1, free_block, l);
     ba_free_page(l, p2, NULL);
 }
 
@@ -1301,7 +1312,7 @@ EXPORT void ba_shrink(struct block_allocator * a) {
 }
 
 EXPORT void ba_defragment(struct block_allocator * a, size_t capacity,
-			  ba_relocation_callback relocate) {
+			  ba_relocation_callback relocate, void * data) {
     struct ba_page *p1, *p2;
 
     ba_shrink(a);
@@ -1317,7 +1328,7 @@ EXPORT void ba_defragment(struct block_allocator * a, size_t capacity,
      * this merges all pages that are less than 50% full
      */
     while ((p1 = a->pages[BA_SLOT_LOW]) && (p2 = p1->next)) {
-	ba_merge_pages(&a->l, p1, p2, relocate);
+	ba_merge_pages(&a->l, p1, p2, relocate, data);
 
 	/* p2 is empty now */
 	DOUBLE_UNLINK(a->pages[BA_SLOT_LOW], p2);
@@ -1336,14 +1347,14 @@ EXPORT void ba_defragment(struct block_allocator * a, size_t capacity,
 }
 
 EXPORT void ba_ldefragment(struct ba_local * a, size_t capacity,
-			   ba_relocation_callback relocate) {
+			   ba_relocation_callback relocate, void *data) {
     if (a->a) {
 	if (a->last_free) {
 	    ba_update_slot(a->a, a->last_free, &a->hf);
 	    a->last_free = NULL;
 	}
 
-	ba_defragment(a->a, capacity, relocate);
+	ba_defragment(a->a, capacity, relocate, data);
     } else {
 	/* TODO: defragment the page and possibly shrink it */
     }
