@@ -1326,6 +1326,17 @@ EXPORT void ba_defragment(struct block_allocator * a, size_t capacity,
 
     if (ba_capacity(a) <= capacity) return;
 
+    /*
+     * we discard alloc, in order to use it for possible defragmentation,
+     * too
+     */
+    if (a->alloc && ba_is_low(&a->l, &a->h)) {
+	a->alloc->h = a->h;
+	DOUBLE_LINK(a->pages[BA_SLOT_LOW], a->alloc);
+	a->alloc = NULL;
+	a->h.first = NULL;
+    }
+
     if (a->last_free) {
 	ba_update_slot(a, a->last_free, &a->hf);
 	a->last_free = NULL;
