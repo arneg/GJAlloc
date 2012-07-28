@@ -1270,7 +1270,7 @@ in_row:
 	    while ((char*)tmp->next == (char*)tmp + l->block_size) {
 		tmp = tmp->next;
 		free_bytes += l->block_size;
-		if (free_bytes >= bytes) goto in_row;
+		if (free_bytes == bytes) break;
 	    }
 
 	    if (tmp->next == BA_ONE) goto in_row;
