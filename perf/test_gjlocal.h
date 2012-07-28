@@ -7,3 +7,4 @@
 #define TEST_DEINIT(t)	ba_ldestroy(&allocator);
 #define TEST_WALK(t, callback, data)	ba_walk_local(&allocator, callback, data)
 #define TEST_NUM_PAGES(t, v)	do { v = allocator.a ? allocator.a->num_pages : 1; } while(0)
+#define TEST_DEFRAGMENT(t, callback, data)  ba_ldefragment(&allocator, 0, callback, data)
