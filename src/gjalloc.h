@@ -246,6 +246,7 @@ struct ba_page {
 };
 
 typedef void (*ba_walk_callback)(void*,void*,void*);
+typedef void (*ba_relocation_callback)(void*,void*,size_t);
 
 /*
  * every allocator has one of these, which describe the layout of pages
