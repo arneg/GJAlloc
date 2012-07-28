@@ -680,7 +680,7 @@ static INLINE struct ba_page * ba_alloc_page(struct block_allocator * a) {
  * one which is full now.
  */
 static INLINE struct ba_page * ba_get_page(struct block_allocator * a,
-				    struct ba_page * p) {
+					   struct ba_page * p) {
     struct ba_page ** b = a->pages;
 
     if (p) {
@@ -689,9 +689,11 @@ static INLINE struct ba_page * ba_get_page(struct block_allocator * a,
 	p->h.flags = BA_FLAG_SORTED;
     }
 
-    // we try a->pages[0] first, to keep defragmentation
-    // low. this might hit performance, by allocating from almost
-    // full pages first.
+    /*
+     * we try a->pages[0] first, to keep defragmentation
+     * low. this might hit performance, by allocating from almost
+     * full pages first.
+     */
     b += !*b;
 
     if (*b) {
@@ -710,8 +712,8 @@ static INLINE struct ba_page * ba_get_page(struct block_allocator * a,
 }
 
 static void ba_update_slot(struct block_allocator * a,
-				  struct ba_page * p,
-				  struct ba_page_header * h) {
+			   struct ba_page * p,
+			   struct ba_page_header * h) {
     struct ba_page ** oslot, ** nslot;
     oslot = ba_get_slot(a, &p->h);
     nslot = ba_get_slot(a, h);
@@ -722,7 +724,7 @@ static void ba_update_slot(struct block_allocator * a,
     if (nslot) DOUBLE_LINK(*nslot, p);
 
     /*
-     * page is empty, so we have to treat is specially
+     * page is empty, so we have to treat it specially
      */
     if (!h->used) {
 	INC(free_empty);
@@ -761,9 +763,9 @@ EXPORT void ba_global_get_page(struct block_allocator * a) {
 }
 
 static INLINE void ba_low_get_free_page(struct block_allocator * a,
-			     struct ba_page_header * h,
-			     struct ba_page ** pp,
-			     const struct ba_block_header * ptr) {
+					struct ba_page_header * h,
+					struct ba_page ** pp,
+					const struct ba_block_header * ptr) {
     if (*pp) {
 	struct ba_page * p = *pp;
 
