@@ -507,32 +507,6 @@ static INLINE void ba_htable_insert(const struct block_allocator * a,
 }
 
 
-#if 0
-static INLINE void ba_htable_replace(const struct block_allocator * a, 
-				     const void * ptr, const uint32_t n,
-				     const uint32_t new) {
-    uint32_t hval = hash1(a, ptr);
-    uint32_t * b = a->htable + (hval & BA_HASH_MASK(a));
-
-    while (*b) {
-	if (*b == n) {
-	    *b = new;
-	    BA_PAGE(a, new)->hchain = BA_PAGE(a, n)->hchain;
-	    BA_PAGE(a, n)->hchain = 0;
-	    return;
-	}
-	b = &BA_PAGE(a, *b)->hchain;
-    }
-#ifdef DEBUG
-
-    fprintf(stderr, "ba_htable_replace(%p, %u, %u)\n", ptr, n, new);
-    fprintf(stderr, "hval: %u, %u, %u\n", hval, hval & BA_HASH_MASK(a), BA_HASH_MASK(a));
-    ba_print_htable(a);
-    BA_ERROR(a, "did not find index to replace.\n")
-#endif
-}
-#endif
-
 static INLINE void ba_htable_delete(const struct block_allocator * a,
 				    struct ba_page * p) {
     uint32_t hval = hash1(a, BA_LASTBLOCK(a->l, p));
