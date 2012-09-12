@@ -47,7 +47,7 @@ size_t bytes = 0, bytes_base;
 TEST_INIT(foo);
 
 #ifdef BLOCK_ALLOCATOR_H
-void relocate_simple(void * ptr, void * stop, ptrdiff_t diff) {
+void relocate_simple(void * ptr, void * stop, ptrdiff_t diff, void* d) {
     struct foo * f = (struct foo *)ptr;
 
     fprintf(stderr, "relocating from %p to %p\n", ptr, stop);

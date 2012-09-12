@@ -15,7 +15,7 @@ struct foo {
 
 struct foo ** list;
 
-void relocate_simple(void * start, void * stop, ptrdiff_t diff) {
+void relocate_simple(void * start, void * stop, ptrdiff_t diff, void * data) {
     struct foo * n = (struct foo*)start;
     
     fprintf(stderr, "relocate_simple(%p, %p, %llu)\n", start, stop, (unsigned long long)diff);

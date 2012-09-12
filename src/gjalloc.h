@@ -641,7 +641,7 @@ label:								\
  */
 
 /*
- * void relocate_simple(void * p, void * stop, ptrdiff_t offset);
+ * void relocate_simple(void * p, void * stop, ptrdiff_t offset, void * data);
  *
  * all blocks from p up until < stop have been relocated. all internal
  * pointers have to be updated by adding offset.
@@ -654,9 +654,11 @@ label:								\
  * relocate n blocks from src to dst. dst is uninitialized.
  */
 
+typedef void (*ba_simple)(void*,void*,ptrdiff_t,void*);
+
 struct ba_relocation {
-    void (*simple)(void*, void*, ptrdiff_t);
-    void (*relocate)(void*, void*, size_t);
+    ba_simple simple;
+    void * data;
 };
 
 typedef union {
@@ -702,8 +704,8 @@ struct ba_local {
 
 EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 			  uint32_t blocks, uint32_t max_blocks,
-			  void (*simple)(void*, void*, ptrdiff_t),
-			  void (*relocate)(void*, void*, size_t));
+			  ba_simple simple,
+			  void * data);
 
 EXPORT void ba_local_grow(struct ba_local * a, uint32_t blocks);
 EXPORT void ba_local_get_page(struct ba_local * a);

@@ -886,8 +886,8 @@ EXPORT size_t ba_lcount(struct ba_local * a) {
 
 EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 			  uint32_t blocks, uint32_t max_blocks,
-			  void (*simple)(void *, void*, ptrdiff_t),
-			  void (*relocate)(void*, void*, size_t)) {
+			  ba_simple simple,
+			  void * data) {
 
     if (block_size < sizeof(struct ba_block_header)) {
 	block_size = sizeof(struct ba_block_header);
@@ -910,17 +910,18 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
     a->max_blocks = max_blocks;
     a->a = NULL;
     a->rel.simple = simple;
-    a->rel.relocate = relocate;
+    a->rel.data = data;
 #ifdef BA_USE_VALGRIND
     VALGRIND_CREATE_MEMPOOL(a, 0, 0);
 #endif
 }
 
-static struct ba_page * ba_local_grow_page(struct ba_page * p,
-					   struct ba_page_header * h,
-					   const struct ba_layout * l,
-					   const struct ba_layout * ol,
-					   const struct ba_relocation * rel) {
+static struct ba_page * ba_local_grow_page(struct ba_local * a,
+					   struct ba_page * p,
+					   const struct ba_layout * l) {
+    struct ba_page_header * h = &a->h;
+    const struct ba_layout * ol = &a->l;
+    const struct ba_relocation * rel = &a->rel;
 
     struct ba_block_header ** t;
     ptrdiff_t diff;
@@ -960,7 +961,7 @@ static struct ba_page * ba_local_grow_page(struct ba_page * p,
 	    /* protect free list during relocation.  */
 	    ba_list_noaccess(n, h->first, l);
 #endif
-	    rel->simple(_start, _stop, diff);
+	    rel->simple(_start, _stop, diff, rel->data);
 #ifdef BA_USE_VALGRIND
 	    ba_list_defined(n, h->first, l);
 #endif
@@ -1007,7 +1008,7 @@ EXPORT INLINE void ba_local_grow(struct ba_local * a,
 	ba_init_layout(&l, a->l.block_size, blocks);
     }
 
-    a->page = ba_local_grow_page(a->page, &a->h, &l, &a->l, &a->rel);
+    a->page = ba_local_grow_page(a, a->page, &l);
     a->l = l;
 
     if (transform) {
