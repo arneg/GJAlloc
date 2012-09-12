@@ -185,8 +185,8 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
     a->h.first = NULL;
 
 #ifdef BA_DEBUG
-    fprintf(stderr, "blocks: %u block_size: %u page_size: %u\n",
-	    blocks, block_size, BA_PAGESIZE(a->l));
+    fprintf(stderr, "blocks: %u block_size: %u page_size: %lu\n",
+	    blocks, block_size, (unsigned long)BA_PAGESIZE(a->l));
 #endif
 
 
@@ -211,9 +211,9 @@ EXPORT void ba_init(struct block_allocator * a, uint32_t block_size,
 #endif
 
 #ifdef BA_DEBUG
-    fprintf(stderr, " -> blocks: %u block_size: %u page_size: %u mallocing size: %u, next pages: %u magnitude: %u\n",
-	    a->l.blocks, block_size, BA_PAGESIZE(a->l)-sizeof(struct ba_page),
-	    BA_PAGESIZE(a->l),
+    fprintf(stderr, " -> blocks: %u block_size: %u page_size: %lu mallocing size: %lu, next pages: %u magnitude: %u\n",
+	    a->l.blocks, block_size, (unsigned long)(BA_PAGESIZE(a->l)-sizeof(struct ba_page)),
+	    (unsigned long)BA_PAGESIZE(a->l),
 	    round_up32(BA_PAGESIZE(a->l)),
 	    a->magnitude);
 #endif
