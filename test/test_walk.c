@@ -26,19 +26,20 @@ void relocate_simple(void * start, void * stop, ptrdiff_t diff, void * data) {
     }
 }
 
-static INLINE void callback(void * _start, void * _stop, void * data) {
+static INLINE int callback(void * _start, void * _stop, void * data) {
     struct foo * start = (struct foo *)_start;
     struct foo * stop = (struct foo *)_stop;
     fprintf(stderr, "callback walking over [%p..%p]\n", start, (stop-1));
 
-    while (start < stop) {
+    do {
 //	fprintf(stderr, "is there: %llu\n", (unsigned long long)start->n);
 	if (start->free) {
 	    fprintf(stderr, "walking over free block %llu\n", (unsigned long long) start->n);
 	}
 	start->trigger = 1;	
-	start++;
-    }
+    } while (++start < stop);
+
+    return BA_CONTINUE;
 }
 
 TEST_INIT(foo);
