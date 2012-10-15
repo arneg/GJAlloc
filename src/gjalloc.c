@@ -1074,20 +1074,23 @@ EXPORT void ba_lfree_all(struct ba_local * a) {
     }
 }
 
-static INLINE void ba_walk_page(const struct ba_layout * l,
+static INLINE int ba_walk_page(const struct ba_layout * l,
 				struct ba_page * p, ba_walk_callback callback,
 				void * data) {
+    int ret = BA_CONTINUE;
 
 #define BA_CALLBACK(a, b, c)	do {	\
     ba_list_noaccess(p, p->h.first, l);	\
-    callback(a, b, c);			\
+    ret = callback(a, b, c);		\
     ba_list_defined(p, p->h.first, l);	\
 } while (0)
 
     BA_WALK_CHUNKS(p, &p->h, l, {
 	BA_CALLBACK(_start, _stop, data);
+	if (ret == BA_STOP) break;
     });
 #undef BA_CALLBACK
+    return ret;
 }
 
 EXPORT void ba_walk(struct block_allocator * a, ba_walk_callback callback,
@@ -1098,8 +1101,9 @@ EXPORT void ba_walk(struct block_allocator * a, ba_walk_callback callback,
     if (a->last_free) ba_update_slot(a, a->last_free, &a->hf);
 
     PAGE_LOOP(a, {
-	if (p->h.used)
-	    ba_walk_page(&a->l, p, callback, data);
+	if (p->h.used) {
+	    if (BA_STOP == ba_walk_page(&a->l, p, callback, data)) return;
+	}
     });
 
     if (a->last_free)
@@ -1113,8 +1117,9 @@ EXPORT void ba_walk_local(struct ba_local * a, ba_walk_callback callback,
     if (a->page)
 	a->page->h = a->h;
     if (!a->a) {
-	if (a->page)
+	if (a->page) {
 	    ba_walk_page(&a->l, a->page, callback, data);
+	}
     } else {
 	if (a->last_free) ba_update_slot(a->a, a->last_free, &a->hf);
 	ba_walk(a->a, callback, data);

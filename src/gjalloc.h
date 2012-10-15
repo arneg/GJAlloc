@@ -245,7 +245,10 @@ struct ba_page {
     struct ba_page *hchain;
 };
 
-typedef void (*ba_walk_callback)(void*,void*,void*);
+#define BA_STOP	    0
+#define BA_CONTINUE 1
+
+typedef int (*ba_walk_callback)(void*,void*,void*);
 typedef void (*ba_relocation_callback)(void*,void*,size_t,void*);
 
 /*
@@ -840,13 +843,13 @@ static INLINE void ba_walk_temporary(const struct ba_temporary * a,
 				     void * data) {
     struct ba_page * p = a->page;
     if (!ba_empty(&a->h)) {
-	callback(BA_BLOCKN(a->l, p, 0), a->h.first, data);
+	if (BA_STOP == callback(BA_BLOCKN(a->l, p, 0), a->h.first, data)) return;
 	goto rest;
     }
 
     while (p) {
-	callback(BA_BLOCKN(a->l, p, 0),
-		 (char*)BA_LASTBLOCK(a->l, p) + a->l.block_size, data);
+	if (BA_STOP == callback(BA_BLOCKN(a->l, p, 0),
+				(char*)BA_LASTBLOCK(a->l, p) + a->l.block_size, data)) return;
 rest:
 	p = p->next;
     }
