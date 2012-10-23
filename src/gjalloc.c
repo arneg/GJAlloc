@@ -896,7 +896,7 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
     if (!blocks) blocks = 16;
     if (!max_blocks) max_blocks = 512;
 
-    if (blocks >= max_blocks) {
+    if (blocks > max_blocks) {
 	ba_error("foo");
     }
 
@@ -906,11 +906,14 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 
     ba_init_layout(&a->l, block_size, blocks);
     a->h.first = NULL;
+    a->h.used = 0;
+    a->h.flags = 0;
     a->page = NULL;
     a->max_blocks = max_blocks;
     a->a = NULL;
     a->rel.simple = simple;
     a->rel.data = data;
+    a->last_free = NULL;
 #ifdef BA_USE_VALGRIND
     VALGRIND_CREATE_MEMPOOL(a, 0, 0);
 #endif
