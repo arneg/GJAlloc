@@ -880,8 +880,11 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 EXPORT size_t ba_lcount(struct ba_local * a) {
     if (a->a) {
 	if (a->page) a->page->h = a->h;
+	if (a->last_free) a->last_free->h = a->hf;
 	return ba_count(a->a);
-    } else return (size_t)(a->page && a->h.used);
+    } else {
+	return (size_t)(a->page ? a->h.used : 0);
+    }
 }
 
 EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
