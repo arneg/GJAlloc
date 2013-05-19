@@ -6,6 +6,7 @@ GCC=gcc -O3 -msse -msse2 -mssse3 -msse4.1 -msse4.2 -I../src
 GCC=gcc -O3 -I../src
 NUM=3
 
+CC=gcc -fno-inline -ggdb -g -I../src -fstrict-aliasing -Wstrict-aliasing=2 -Wall -O3 -msse $(X) $(LD_FLAGS)
 CC=gcc -I../src -fstrict-aliasing -Wstrict-aliasing=2 -Wall -O3 -msse $(X) $(LD_FLAGS)
 CXX=g++ -g -Wall -O3 -msse $(X) $(LD_FLAGS)
 
@@ -43,17 +44,17 @@ perf:
 	test -d perf || mkdir perf
 
 c/test_%.c:	test_%.h test.c  c
-	cat $< > $@
-	echo "#line 1 \"test.c\"" >> $@
-	cat test.c >> $@
+	@cat $< > $@
+	@echo "#line 1 \"test.c\"" >> $@
+	@cat test.c >> $@
 
 c/test_%:	c/test_%.c
 	$(CC) $< -o $@
 
 cpp/test_%.cpp:	 test_%.hh test.c cpp
-	cat $< > $@
-	echo "#line 1 \"test.c\"" >> $@
-	cat test.c >> $@
+	@cat $< > $@
+	@echo "#line 1 \"test.c\"" >> $@
+	@cat test.c >> $@
 
 cpp/test_%: cpp/test_%.cpp
 	$(CXX) $< -o $@
@@ -71,6 +72,12 @@ c/test_gj: c/test_gj.c
 	$(CC) -I../src ../src/gjalloc.c $< -o $@
 
 c/test_gjlocal: c/test_gjlocal.c
+	$(CC) -I../src ../src/gjalloc.c $< -o $@
+
+c/test_gjdoubling: c/test_gjdoubling.c
+	$(CC) -I../src ../src/gjalloc.c $< -o $@
+
+c/test_gjlog: c/test_gjlog.c
 	$(CC) -I../src ../src/gjalloc.c $< -o $@
 
 c/test_gjtemporary: c/test_gjtemporary.c
