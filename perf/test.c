@@ -50,9 +50,10 @@ TEST_INIT(foo);
 void relocate_simple(void * ptr, void * stop, ptrdiff_t diff, void* d) {
     struct foo * f = (struct foo *)ptr;
 
-    fprintf(stderr, "relocating from %p to %p\n", ptr, stop);
-    while (f < (struct foobar *)stop) {
+    //fprintf(stderr, "relocating %ld bytes at %p by %lx\n", (char*)stop - (char*)ptr, ptr, diff);
+    while (f < (struct foo *)stop) {
 	ba_simple_rel_pointer(f->ptr, diff);
+	f++;
     }
 }
 #endif
@@ -70,6 +71,9 @@ long int run2(long int n, uint32_t * shuffler) {
 
     clock_gettime(CLOCK_MONOTONIC, &t1);
     for (i = 0; i < runs; i++) {
+#ifdef TEST_RESERVE
+	TEST_RESERVE(foo, n);
+#endif
 	for (j = 0; j < n; j++) {
 	    p[j] = TEST_ALLOC(foo);
 	    ((struct foo *)p[j])->ptr = p + j;
