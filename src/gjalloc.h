@@ -720,6 +720,8 @@ EXPORT void ba_walk_local(struct ba_local * a, ba_walk_callback, void * data);
 EXPORT void ba_ldefragment(struct ba_local * a, size_t capacity,
 			   ba_relocation_callback, void *data);
 
+EXPORT struct ba_page * ba_grow_page(struct ba_page * p, const struct ba_layout * ol,
+				     const struct ba_relocation * rel, const struct ba_layout * l);
 
 static INLINE size_t ba_lcapacity(const struct ba_local * a) {
     if (a->a) {
@@ -798,7 +800,7 @@ DO_FREE:
 
 
 /* Here comes definitions for a dummy allocator.
- * It is implemented comletely as inoine functions, and cannot
+ * It is implemented comletely as inline functions, and cannot
  * free items. Its supposed to be used when allocating
  * temporary nodes.
  * =============================================
@@ -811,19 +813,7 @@ struct ba_temporary {
     uint32_t num_pages;
 };
 
-static INLINE void ba_init_temporary(struct ba_temporary * a,
-				     uint32_t block_size,
-				     uint32_t blocks) {
-    if (!blocks) blocks = 128;
-    if (block_size < sizeof(struct ba_block_header)) {
-	block_size = sizeof(struct ba_block_header);
-    }
-    ba_init_layout(&a->l, block_size, blocks);
-    ba_align_layout(&a->l);
-    a->h.first = NULL;
-    a->page = NULL;
-    a->num_pages = 0;
-}
+EXPORT void ba_init_temporary(struct ba_temporary * a, uint32_t block_size, uint32_t blocks);
 
 ATTRIBUTE((malloc))
 static INLINE void * ba_talloc(struct ba_temporary * a) {
@@ -855,17 +845,64 @@ rest:
     }
 }
 
-static INLINE void ba_tdestroy(struct ba_temporary * a) {
-    struct ba_page * p = a->page;
-    while (p) {
-	struct ba_page * n = p->next;
-	free(p);
-	p = n;
-    }
-    a->page = NULL;
-    a->h.first = NULL;
-    a->num_pages = 0;
+EXPORT void ba_tdestroy(struct ba_temporary * a);
+
+struct ba_doubling {
+    struct ba_layout l;
+    struct ba_page_header h;
+    struct ba_page * p;
+    struct ba_relocation rel;
+};
+
+EXPORT void ba_init_doubling(struct ba_doubling * a, uint32_t block_size,
+			     uint32_t blocks, ba_simple rel, void * data);
+
+EXPORT void ba_low_dreserve(struct ba_doubling * a, uint32_t n);
+
+static INLINE void ba_dreserve(struct ba_doubling * a, uint32_t n) {
+    n += a->h.used;
+
+    if (a->l.blocks < n) ba_low_dreserve(a, n);
 }
+
+ATTRIBUTE((malloc))
+static INLINE void * ba_dalloc(struct ba_doubling * a) {
+    return ba_shift(&a->h, a->p, &a->l);
+}
+
+static INLINE void ba_dfree(struct ba_doubling * a, void * ptr) {
+    ba_unshift(&a->h, (struct ba_block_header*)ptr);
+}
+
+static INLINE void ba_ddestroy(struct ba_doubling * a) {
+    free(a->p);
+    a->p = NULL;
+    a->h.first = NULL;
+}
+
+struct ba_log_page {
+    struct ba_page_header h;
+};
+
+struct ba_log {
+    struct ba_layout l;
+    int size;
+    struct ba_log_page * pages[16];
+};
+
+static INLINE void ba_double_layout(struct ba_layout * l) {
+    l->blocks *= 2;
+    l->offset = sizeof(struct ba_log_page) + (l->blocks - 1) * l->block_size;
+}
+
+static INLINE void ba_half_layout(struct ba_layout * l) {
+    l->blocks /= 2;
+    l->offset = sizeof(struct ba_log_page) + (l->blocks - 1) * l->block_size;
+}
+
+EXPORT void ba_log_init(struct ba_log * a, uint32_t block_size, uint32_t blocks);
+ATTRIBUTE((malloc)) EXPORT void * ba_log_alloc(struct ba_log * a);
+EXPORT void ba_log_free(struct ba_log * a, void * ptr);
 
 #endif /* BLOCK_ALLOCATOR_H */
 #ifdef __cplusplus

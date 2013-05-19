@@ -294,7 +294,20 @@ static INLINE void ba_free_page(const struct ba_layout * l,
 #ifdef BA_USE_VALGRIND
     VALGRIND_MAKE_MEM_DEFINED(p->h.first, sizeof(void*));
 #endif
+#ifdef BA_PRECHAIN
+    do {
+	struct ba_block_header * ptr = BA_BLOCKN(*l, p, 0);
+	while (ptr < BA_LASTBLOCK(*l, p)) {
+	    struct ba_block_header * t
+		= (struct ba_block_header)((char*)ptr + l->block_size);
+	    ptr->next = t;
+	    ptr = t;
+	}
+	ptr->next = NULL;
+    } while(0);
+#else
     p->h.first->next = BA_ONE;
+#endif
 #ifdef BA_USE_VALGRIND
     VALGRIND_MAKE_MEM_NOACCESS(p+1, l->block_size * l->blocks);
 #endif
@@ -839,9 +852,28 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
     if (a->empty_pages < a->max_empty_pages) {
 	BA_ERROR(a, "strange things happening\n");
     }
-    if (p == a->pages[0] || p == a->pages[1]) {
-	BA_ERROR(a, "removing first page. this is not supposed to happen\n");
-    }
+
+    do {
+	int found = 0;
+	struct ba_page * s;
+
+	for (s = a->pages[0]; s; s = s->next) {
+	    if (s == p) {
+		found = 1;
+		break;
+	    }
+	}
+	for (s = a->pages[1]; s; s = s->next) {
+	    if (s == p) {
+		found |= 2;
+		break;
+	    }
+	}
+
+	if (found) {
+	    BA_ERROR(a, "removing page from wrong slot. this is not supposed to happen\n");
+	}
+    } while (0);
 #endif
 
 #if 0/*def BA_DEBUG*/
@@ -880,7 +912,7 @@ EXPORT void ba_remove_page(struct block_allocator * a) {
 EXPORT size_t ba_lcount(struct ba_local * a) {
     if (a->a) {
 	if (a->page) a->page->h = a->h;
-	if (a->last_free) a->last_free->h = a->hf;
+	if (a->last_free) ba_update_slot(a->a, a->last_free, &a->hf);
 	return ba_count(a->a);
     } else {
 	return (size_t)(a->page ? a->h.used : 0);
@@ -922,18 +954,16 @@ EXPORT void ba_init_local(struct ba_local * a, uint32_t block_size,
 #endif
 }
 
-static struct ba_page * ba_local_grow_page(struct ba_local * a,
-					   struct ba_page * p,
-					   const struct ba_layout * l) {
-    struct ba_page_header * h = &a->h;
-    const struct ba_layout * ol = &a->l;
-    const struct ba_relocation * rel = &a->rel;
-
+EXPORT struct ba_page * ba_grow_page(struct ba_page * p, const struct ba_layout * ol,
+				     const struct ba_relocation * rel, const struct ba_layout * l) {
+    struct ba_page_header * h;
     struct ba_block_header ** t;
     ptrdiff_t diff;
     struct ba_page * n;
 
     n = (struct ba_page*)BA_XREALLOC(p, BA_PAGESIZE(*l));
+
+    h = &n->h;
 
     if (!p) {
 	ba_free_page(l, n, NULL);
@@ -961,7 +991,7 @@ static struct ba_page * ba_local_grow_page(struct ba_local * a,
 	    (*t)->next = BA_ONE;
 	}
 
-	BA_WALK_CHUNKS(n, h, l, {
+	BA_WALK_CHUNKS(n, h, ol, {
 #ifdef BA_USE_VALGRIND
 	    char * temp = _start;
 	    /* protect free list during relocation.  */
@@ -1014,7 +1044,9 @@ EXPORT INLINE void ba_local_grow(struct ba_local * a,
 	ba_init_layout(&l, a->l.block_size, blocks);
     }
 
-    a->page = ba_local_grow_page(a, a->page, &l);
+    a->page->h = a->h;
+    a->page = ba_grow_page(a->page, &a->l, &a->rel, &l);
+    a->h = a->page->h;
     a->l = l;
 
     if (transform) {
@@ -1104,7 +1136,10 @@ EXPORT void ba_walk(struct block_allocator * a, ba_walk_callback callback,
     if (a->alloc)
 	a->alloc->h = a->h;
 
-    if (a->last_free) ba_update_slot(a, a->last_free, &a->hf);
+    if (a->last_free) {
+	ba_update_slot(a, a->last_free, &a->hf);
+	a->last_free = NULL;
+    }
 
     PAGE_LOOP(a, {
 	if (p->h.used) {
@@ -1112,8 +1147,6 @@ EXPORT void ba_walk(struct block_allocator * a, ba_walk_callback callback,
 	}
     });
 
-    if (a->last_free)
-	a->hf = a->last_free->h;
     if (a->alloc)
 	a->h = a->alloc->h;
 }
@@ -1127,9 +1160,11 @@ EXPORT void ba_walk_local(struct ba_local * a, ba_walk_callback callback,
 	    ba_walk_page(&a->l, a->page, callback, data);
 	}
     } else {
-	if (a->last_free) ba_update_slot(a->a, a->last_free, &a->hf);
+	if (a->last_free) {
+	    ba_update_slot(a->a, a->last_free, &a->hf);
+	    a->last_free = NULL;
+	}
 	ba_walk(a->a, callback, data);
-	if (a->last_free) a->hf = a->last_free->h;
     }
     if (a->page)
 	a->h = a->page->h;
@@ -1388,6 +1423,162 @@ EXPORT void ba_ldefragment(struct ba_local * a, size_t capacity,
     } else {
 	/* TODO: defragment the page and possibly shrink it */
     }
+}
+
+EXPORT void ba_init_temporary(struct ba_temporary * a, uint32_t block_size, uint32_t blocks) {
+    if (!blocks) blocks = 128;
+    if (block_size < sizeof(struct ba_block_header)) {
+	block_size = sizeof(struct ba_block_header);
+    }
+    ba_init_layout(&a->l, block_size, blocks);
+    ba_align_layout(&a->l);
+    a->h.first = NULL;
+    a->page = NULL;
+    a->num_pages = 0;
+}
+
+EXPORT void ba_tdestroy(struct ba_temporary * a) {
+    struct ba_page * p = a->page;
+    while (p) {
+	struct ba_page * n = p->next;
+	free(p);
+	p = n;
+    }
+    a->page = NULL;
+    a->h.first = NULL;
+    a->num_pages = 0;
+}
+
+EXPORT void ba_init_doubling(struct ba_doubling * a, uint32_t block_size,
+			     uint32_t blocks, ba_simple rel, void * data) {
+    if (blocks & (blocks - 1)) {
+	blocks = round_up32(blocks);
+    }
+
+    ba_init_layout(&a->l, block_size, blocks);
+    a->p = ba_low_alloc_page(&a->l);
+    a->h = a->p->h;
+    a->rel.simple = rel;
+    a->rel.data = data;
+}
+
+EXPORT void ba_low_dreserve(struct ba_doubling * a, uint32_t n) {
+    struct ba_layout l;
+
+    n = round_up32(n);
+    ba_init_layout(&l, a->l.block_size, n);
+    a->p->h = a->h;
+    a->p = ba_grow_page(a->p, &a->l, &a->rel, &l);
+    a->h = a->p->h;
+    a->l = l;
+    if (ba_empty(&a->h)) {
+	fprintf(stderr, "empty after reserve\n");
+    }
+}
+
+static struct ba_log_page * ba_alloc_log_page(struct ba_log * a) {
+    size_t n = a->l.block_size;
+    struct ba_log_page * p;
+    n *= a->l.blocks;
+    n += sizeof(struct ba_log_page);
+    p = (struct ba_log_page*)BA_XALLOC(n);
+    p->h.first = BA_BLOCKN(a->l, p, 0);
+    p->h.first->next = BA_ONE;
+    p->h.used = 0;
+    return p;
+}
+
+EXPORT void ba_log_init(struct ba_log * a, uint32_t block_size, uint32_t blocks) {
+    memset(a->pages, 0, sizeof(a->pages[0]) * 16);
+    a->size = 0;
+    a->l.block_size = block_size;
+    a->l.blocks = (blocks = round_up32(blocks));
+    a->l.offset = sizeof(struct ba_log_page) + block_size * (blocks-1);
+    a->pages[0] = ba_alloc_log_page(a);
+}
+
+ATTRIBUTE((malloc))
+EXPORT void * ba_log_alloc(struct ba_log * a) {
+    struct ba_log_page * p = a->pages[a->size];
+    struct ba_block_header * ptr = p->h.first;
+
+    p->h.used++;
+
+    if (ptr->next == BA_ONE) {
+	p->h.first = (struct ba_block_header*)((char*)ptr + a->l.block_size);
+	p->h.first->next = (struct ba_block_header*)(size_t)!(p->h.first == BA_LASTBLOCK(a->l, p));
+    } else {
+	p->h.first = ptr->next;
+    }
+
+    if (!p->h.first) {
+
+#ifdef BA_DEBUG
+	if (a->size == 16) {
+	    BA_ERROR(a, "bad.");
+	}
+#endif
+
+	ba_double_layout(&a->l);
+
+	a->pages[++a->size] = ba_alloc_log_page(a);
+    }
+
+    return ptr;
+}
+
+EXPORT void ba_log_free(struct ba_log * a, void * ptr) {
+    struct ba_log_page * p = NULL;
+    struct ba_layout l = a->l;
+    int i;
+
+    for (i = a->size; i >= 0; i--, ba_half_layout(&l)) {
+	if (BA_CHECK_PTR(l, a->pages[i], ptr)) {
+	    p = a->pages[i];
+	    break;
+	}
+    }
+
+#ifdef BA_DEBUG
+    if (p) {
+#endif
+	struct ba_block_header * b = (struct ba_block_header*)ptr;
+	b->next = p->h.first;
+	p->h.first = b;
+#ifdef BA_DEBUG
+	if (!p->h.used) {
+	    fprintf(stderr, "freeing from empty page %p\n", p);
+	    goto ERR;
+	}
+#endif
+	if (!(--p->h.used) && i == a->size) {
+	    while (i && !(p->h.used)) {
+		/*
+		 * we always have to assume that at least one block is available
+		 */
+		if (!i || !a->pages[i-1]->h.first) break;
+		free(p);
+		a->pages[i] = NULL;
+
+		p = a->pages[--i];
+		ba_half_layout(&a->l);
+	    }
+	    a->size = i;
+	}
+#ifdef BA_DEBUG
+    } else {
+	int i;
+ERR:
+	l = a->l;
+	for (i = a->size; i >= 0; ba_half_layout(&l), i--) {
+	    p = a->pages[i];
+	    fprintf(stderr, "page: %p used: %u/%u last: %p p+offset: %p\n", a->pages[i],
+		    p->h.used, l.blocks,
+		    BA_BLOCKN(l, p, l.blocks-1), BA_LASTBLOCK(l, p));
+	}
+	BA_ERROR(a, "ptr %p not in any page.\n", ptr);
+    }
+#endif
 }
 
 #ifdef __cplusplus
