@@ -7,7 +7,7 @@ extern "C" {
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <malloc.h>
+#include <malloc/malloc.h>
 #ifdef BA_STATS
 # include <unistd.h>
 # include <mcheck.h>
