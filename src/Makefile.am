@@ -5,4 +5,4 @@ AM_LDFLAGS =
 include_HEADERS= gjalloc.h
 lib_LTLIBRARIES= libgjalloc.la
 libgjalloc_la_SOURCES= gjalloc.c
-libgjalloc_la_LIBADD= -lrt
+libgjalloc_la_LIBADD= @OS_DEPS@

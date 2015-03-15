@@ -6,8 +6,21 @@ AC_INIT([GJAlloc], [0.08], [https://github.com/arneg/GJAlloc])
 AM_INIT_AUTOMAKE(GJAlloc, 0.08)
 AC_CONFIG_SRCDIR([src/gjalloc.c])
 AC_CONFIG_HEADERS([config.h])
-
 #AC_CONFIG_FILES([Makefile])
+
+AC_CANONICAL_HOST
+case $host_os in
+  darwin* )
+        OS_DEPS=""
+        ;;
+  linux*)
+        OS_DEPS="-lrt"
+        ;;
+   *BSD*)
+        OS_DEPS="-lrt"
+        ;;
+esac
+AC_SUBST(OS_DEPS)
 
 # Checks for programs.
 AC_PROG_CXX

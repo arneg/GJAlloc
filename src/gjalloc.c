@@ -7,7 +7,13 @@ extern "C" {
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#else
 #include <malloc.h>
+#endif
+
 #ifdef BA_STATS
 # include <unistd.h>
 # include <mcheck.h>
