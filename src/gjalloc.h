@@ -106,7 +106,7 @@ extern "C" {
 #  include <stdio.h>
 #  include <unistd.h>
 ATTRIBUTE((noreturn))
-static inline void __error(int line, char * file, char * msg) {
+static inline void _ba_error(int line, char * file, char * msg) {
     fprintf(stderr, "%s:%d\t%s\n", file, line, msg);
     _exit(1);
 }
