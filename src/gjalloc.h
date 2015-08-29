@@ -110,7 +110,7 @@ static inline void _ba_error(int line, char * file, char * msg) {
     fprintf(stderr, "%s:%d\t%s\n", file, line, msg);
     _exit(1);
 }
-#  define ba_error(x...)	do { snprintf(errbuf, 127, x); __error(__LINE__, __FILE__, errbuf); } while(0)
+#  define ba_error(x...)	do { snprintf(errbuf, 127, x); _ba_error(__LINE__, __FILE__, errbuf); } while(0)
 
 #  define BA_NEED_ERRBUF
 extern char errbuf[];
