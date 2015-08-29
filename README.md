@@ -103,3 +103,12 @@
 
   Notice: no deallocate here. Each block will be automatically freed when
   the last SmartPointer pointing to it goes out of scope.
+
+## Bugs
+
+  As already meantioned above, this library was originally written for use in [pike](http://pike.lysator.liu.se)
+  and for experimenting with different block allocator algorithms. Pike internally uses exception handling built upon
+  setjmp/longjmp and hence this library lacks standard error handling using return values. For instance, the allocation
+  functions will not return `NULL` in out-of-memory situations, instead the macros `ba_error()` is invoked. By default,
+  `ba_error` will terminate the process but it can be defined in order to handle error cases differently. Unfortunately,
+  in the absense of exception handling, errors cannot be correctly handled using this library.
